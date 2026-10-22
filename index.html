@@ -1,1070 +1,1712 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr" class="h-full bg-slate-950 text-slate-100">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Autonomous Web3 Flash Loan & Liquidity Operations Agent</title>
-  <meta name="description" content="100% Autonomous Web3 Flash Loan Liquidity Routing Agent with real Polygon RPC mempool scouting, live ethers.js integration, and strict Zero-Human Review Filter." />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CatalogFlow 🇩🇿 | Algerian E-Commerce Catalog & Storefront Automation</title>
+  <meta name="description" content="Plateforme d'automatisation e-commerce pour le marché algérien. Importation de produits, conversion USD-DZD, intégration Shopify & YouCan et gestion des 58 Wilayas." />
+  <meta property="og:title" content="CatalogFlow 🇩🇿 | Algerian E-Commerce Automation" />
+  <meta property="og:description" content="Smart product scraper, multi-storefront sync (Shopify & YouCan), and DZD COD pricing for Algerian e-commerce." />
+  <meta property="og:type" content="website" />
   
-  <!-- Fonts -->
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Plus Jakarta Sans & Tajawal (Arabic) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-  <!-- Tailwind CSS via CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
           fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace']
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            arabic: ['"Tajawal"', 'sans-serif'],
           },
           colors: {
-            slate: {
-              950: '#090d16',
-              900: '#0f172a',
-              850: '#131e33',
-              800: '#1e293b'
-            }
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+            },
+            youcan: {
+              DEFAULT: '#00b074',
+              hover: '#029764',
+            },
+            shopify: {
+              DEFAULT: '#95bf47',
+              hover: '#7ea43b',
+            },
+            dzred: '#d21034',
           }
         }
       }
     }
   </script>
-
-  <!-- Ethers.js v6 Production CDN with Fallback -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.5/ethers.umd.min.js"></script>
-  <script>
-    if (typeof ethers === 'undefined') {
-      document.write('<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"><\/script>');
-    }
-  </script>
-
+  
   <style>
     body {
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-      background-color: #090d16;
-      color: #e2e8f0;
-      -webkit-tap-highlight-color: transparent;
+      font-family: 'Plus Jakarta Sans', sans-serif;
     }
-    code, pre, .font-mono {
-      font-family: 'JetBrains Mono', monospace;
+    .font-ar {
+      font-family: 'Tajawal', sans-serif;
     }
     ::-webkit-scrollbar {
-      width: 5px;
-      height: 5px;
+      width: 6px;
+      height: 6px;
     }
     ::-webkit-scrollbar-track {
       background: #0f172a;
     }
     ::-webkit-scrollbar-thumb {
       background: #334155;
-      border-radius: 2px;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-cyan-500/20 selection:text-cyan-300">
+<body class="h-full bg-slate-950 text-slate-100 antialiased selection:bg-brand-500 selection:text-white">
 
-  <!-- Top App Navigation Bar -->
-  <header class="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur sticky top-0 z-40 px-4 py-3">
-    <div class="max-w-6xl mx-auto flex items-center justify-between gap-3">
-      <div class="flex items-center gap-2.5">
-        <div class="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- APP ROOT -->
+  <div id="app" class="min-h-full flex flex-col"></div>
+
+  <!-- NATIVE JAVASCRIPT STATE MANAGEMENT & MOCK DATABASE -->
+  <script>
+    // ==========================================
+    // 58 ALGERIAN WILAYAS WITH COD TARIFFS
+    // ==========================================
+    const ALGERIAN_WILAYAS = [
+      { code: "01", name: "Adrar", nameAr: "أدرار", zone: "Sud", deskCost: 900, homeCost: 1400 },
+      { code: "02", name: "Chlef", nameAr: "الشلف", zone: "Centre-Ouest", deskCost: 450, homeCost: 750 },
+      { code: "03", name: "Laghouat", nameAr: "الأغواط", zone: "Hauts-Plateaux", deskCost: 650, homeCost: 950 },
+      { code: "04", name: "Oum El Bouaghi", nameAr: "أم البواقي", zone: "Est", deskCost: 500, homeCost: 800 },
+      { code: "05", name: "Batna", nameAr: "باتنة", zone: "Est", deskCost: 500, homeCost: 800 },
+      { code: "06", name: "Béjaïa", nameAr: "بجاية", zone: "Centre-Est", deskCost: 450, homeCost: 750 },
+      { code: "07", name: "Biskra", nameAr: "بسكرة", zone: "Sud-Est", deskCost: 600, homeCost: 900 },
+      { code: "08", name: "Béchar", nameAr: "بشار", zone: "Sud-Ouest", deskCost: 800, homeCost: 1200 },
+      { code: "09", name: "Blida", nameAr: "البليدة", zone: "Centre", deskCost: 350, homeCost: 600 },
+      { code: "10", name: "Bouira", nameAr: "البويرة", zone: "Centre", deskCost: 400, homeCost: 650 },
+      { code: "11", name: "Tamanrasset", nameAr: "تمنراست", zone: "Grand Sud", deskCost: 1100, homeCost: 1700 },
+      { code: "12", name: "Tébessa", nameAr: "تبسة", zone: "Est", deskCost: 550, homeCost: 850 },
+      { code: "13", name: "Tlemcen", nameAr: "تلمسان", zone: "Ouest", deskCost: 500, homeCost: 800 },
+      { code: "14", name: "Tiaret", nameAr: "تيارت", zone: "Hauts-Plateaux", deskCost: 500, homeCost: 800 },
+      { code: "15", name: "Tizi Ouzou", nameAr: "تيزي وزو", zone: "Centre-Est", deskCost: 400, homeCost: 700 },
+      { code: "16", name: "Alger", nameAr: "الجزائر", zone: "Capitale", deskCost: 300, homeCost: 500 },
+      { code: "17", name: "Djelfa", nameAr: "الجلفة", zone: "Hauts-Plateaux", deskCost: 600, homeCost: 850 },
+      { code: "18", name: "Jijel", nameAr: "جيجل", zone: "Est", deskCost: 500, homeCost: 800 },
+      { code: "19", name: "Sétif", nameAr: "سطيف", zone: "Est", deskCost: 450, homeCost: 750 },
+      { code: "20", name: "Saïda", nameAr: "سعيدة", zone: "Ouest", deskCost: 550, homeCost: 850 },
+      { code: "21", name: "Skikda", nameAr: "سكيكدة", zone: "Est", deskCost: 500, homeCost: 800 },
+      { code: "22", name: "Sidi Bel Abbès", nameAr: "سيدي بلعباس", zone: "Ouest", deskCost: 500, homeCost: 800 },
+      { code: "23", name: "Annaba", nameAr: "عنابة", zone: "Est", deskCost: 450, homeCost: 750 },
+      { code: "24", name: "Guelma", nameAr: "قالمة", zone: "Est", deskCost: 500, homeCost: 800 },
+      { code: "25", name: "Constantine", nameAr: "قسنطينة", zone: "Est", deskCost: 450, homeCost: 750 },
+      { code: "26", name: "Médéa", nameAr: "المدية", zone: "Centre", deskCost: 400, homeCost: 650 },
+      { code: "27", name: "Mostaganem", nameAr: "مستغانم", zone: "Ouest", deskCost: 450, homeCost: 750 },
+      { code: "28", name: "M'Sila", nameAr: "المسيلة", zone: "Hauts-Plateaux", deskCost: 550, homeCost: 850 },
+      { code: "29", name: "Mascara", nameAr: "معسكر", zone: "Ouest", deskCost: 500, homeCost: 800 },
+      { code: "30", name: "Ouargla", nameAr: "ورقلة", zone: "Sud", deskCost: 750, homeCost: 1100 },
+      { code: "31", name: "Oran", nameAr: "وهران", zone: "Ouest", deskCost: 400, homeCost: 650 },
+      { code: "32", name: "El Bayadh", nameAr: "البيض", zone: "Hauts-Plateaux", deskCost: 650, homeCost: 950 },
+      { code: "33", name: "Illizi", nameAr: "إيليزي", zone: "Grand Sud", deskCost: 1100, homeCost: 1700 },
+      { code: "34", name: "Bordj Bou Arréridj", nameAr: "برج بوعريريج", zone: "Est", deskCost: 450, homeCost: 750 },
+      { code: "35", name: "Boumerdès", nameAr: "بومرداس", zone: "Centre", deskCost: 350, homeCost: 550 },
+      { code: "36", name: "El Tarf", nameAr: "الطارف", zone: "Est", deskCost: 550, homeCost: 850 },
+      { code: "37", name: "Tindouf", nameAr: "تندوف", zone: "Grand Sud", deskCost: 1200, homeCost: 1800 },
+      { code: "38", name: "Tissemsilt", nameAr: "تيسمسيلت", zone: "Hauts-Plateaux", deskCost: 550, homeCost: 850 },
+      { code: "39", name: "El Oued", nameAr: "الوادي", zone: "Sud-Est", deskCost: 700, homeCost: 1000 },
+      { code: "40", name: "Khenchela", nameAr: "خنشلة", zone: "Est", deskCost: 550, homeCost: 850 },
+      { code: "41", name: "Souk Ahras", nameAr: "سوق أهراس", zone: "Est", deskCost: 550, homeCost: 850 },
+      { code: "42", name: "Tipaza", nameAr: "تيبازة", zone: "Centre", deskCost: 350, homeCost: 550 },
+      { code: "43", name: "Mila", nameAr: "ميلة", zone: "Est", deskCost: 500, homeCost: 800 },
+      { code: "44", name: "Aïn Defla", nameAr: "عين الدفلى", zone: "Centre-Ouest", deskCost: 450, homeCost: 700 },
+      { code: "45", name: "Naâma", nameAr: "النعامة", zone: "Hauts-Plateaux", deskCost: 700, homeCost: 1000 },
+      { code: "46", name: "Aïn Témouchent", nameAr: "عين تموشنت", zone: "Ouest", deskCost: 450, homeCost: 750 },
+      { code: "47", name: "Ghardaïa", nameAr: "غرداية", zone: "Sud", deskCost: 750, homeCost: 1100 },
+      { code: "48", name: "Relizane", nameAr: "غليزان", zone: "Ouest", deskCost: 450, homeCost: 750 },
+      { code: "49", name: "Timimoun", nameAr: "تيميمون", zone: "Sud", deskCost: 950, homeCost: 1450 },
+      { code: "50", name: "Bordj Badji Mokhtar", nameAr: "برج باجي مختار", zone: "Grand Sud", deskCost: 1300, homeCost: 1900 },
+      { code: "51", name: "Ouled Djellal", nameAr: "أولاد جلال", zone: "Sud-Est", deskCost: 650, homeCost: 950 },
+      { code: "52", name: "Béni Abbès", nameAr: "بني عباس", zone: "Sud-Ouest", deskCost: 950, homeCost: 1450 },
+      { code: "53", name: "In Salah", nameAr: "عين صالح", zone: "Grand Sud", deskCost: 1050, homeCost: 1600 },
+      { code: "54", name: "In Guezzam", nameAr: "عين قزام", zone: "Grand Sud", deskCost: 1300, homeCost: 1900 },
+      { code: "55", name: "Touggourt", nameAr: "تقرت", zone: "Sud-Est", deskCost: 750, homeCost: 1100 },
+      { code: "56", name: "Djanet", nameAr: "جانت", zone: "Grand Sud", deskCost: 1200, homeCost: 1800 },
+      { code: "57", name: "El M'Ghair", nameAr: "المغير", zone: "Sud-Est", deskCost: 700, homeCost: 1000 },
+      { code: "58", name: "El Meniaa", nameAr: "المنيعة", zone: "Sud", deskCost: 850, homeCost: 1300 }
+    ];
+
+    // ==========================================
+    // INITIAL STATE / MOCK DATABASE
+    // ==========================================
+    const state = {
+      isAuthenticated: true,
+      authMode: 'login',
+      currentUser: {
+        name: "Amine Meziani",
+        email: "amine.ecom@catalogflow.dz",
+        company: "DZ Dropship Hub Ltd",
+        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+        marketRate: 236.5,
+        officialRate: 134.2
+      },
+      currentTab: 'dashboard',
+      activeStoreTab: 'shopify',
+      
+      connectedStores: [
+        {
+          id: 'store_1',
+          platform: 'shopify',
+          name: 'algeria-tech-store.myshopify.com',
+          status: 'connected',
+          lastSync: 'Il y a 14 min',
+          productsCount: 68,
+          currency: 'DZD',
+          verifiedAt: '2026-10-18'
+        },
+        {
+          id: 'store_2',
+          platform: 'youcan',
+          name: 'dz-tendances.youcan.shop',
+          status: 'connected',
+          lastSync: 'Il y a 32 min',
+          productsCount: 74,
+          currency: 'DZD',
+          verifiedAt: '2026-10-20'
+        }
+      ],
+
+      scraperForm: {
+        url: 'https://www.aliexpress.com/item/1005007429103982.html',
+        usdPrice: 12.50,
+        exchangeRate: 236.5,
+        rateType: 'parallel',
+        profitMargin: 45,
+        targetWilaya: '16',
+        deliveryType: 'homeCost',
+        includePackaging: 120,
+        autoCleanImages: true,
+        translateDarija: true,
+      },
+
+      drafts: [
+        {
+          id: 'draft_101',
+          titleFr: 'Nettoyeur Vapeur Portatif Haute Pression Multi-Surfaces',
+          titleAr: 'جهاز التنظيف بالبخار عالي الضغط المحمول لجميع الأسطح والسيارات',
+          sourceUrl: 'https://aliexpress.com/item/steam-cleaner-portable',
+          sourcePlatform: 'AliExpress',
+          originalUsd: 18.20,
+          exchangeRate: 236.5,
+          costDzd: 4304,
+          margin: 45,
+          shippingDzd: 500,
+          packagingDzd: 150,
+          finalPriceDzd: 6890,
+          originalPriceCrossed: 8900,
+          status: 'ready',
+          wilayaHub: '16 - Alger',
+          codReady: true,
+          image: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=400&q=80',
+          specs: ['Puissance 1050W', 'Réservoir 350ml', 'Câble long 3m', 'Désinfection 99.9%'],
+          rating: 4.8,
+          targetAudience: 'Ménage, detailing auto, salons'
+        },
+        {
+          id: 'draft_102',
+          titleFr: 'Mini Imprimante Thermique Bluetooth Sans Encre de Poche',
+          titleAr: 'طابعة حرارية لاسلكية جيبية بدون حبر للصور والفواتير والدراسة',
+          sourceUrl: 'https://cjdropshipping.com/product/pocket-thermal-printer',
+          sourcePlatform: 'CJ Dropshipping',
+          originalUsd: 8.50,
+          exchangeRate: 236.5,
+          costDzd: 2010,
+          margin: 55,
+          shippingDzd: 500,
+          packagingDzd: 100,
+          finalPriceDzd: 3750,
+          originalPriceCrossed: 4900,
+          status: 'ready',
+          wilayaHub: '16 - Alger',
+          codReady: true,
+          image: 'https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?auto=format&fit=crop&w=400&q=80',
+          specs: ['Connexion Bluetooth 5.0', 'Résolution 200 DPI', 'Application iOS & Android', 'Rouleau offert'],
+          rating: 4.9,
+          targetAudience: 'Étudiants, commerçants COD, papeterie'
+        },
+        {
+          id: 'draft_103',
+          titleFr: 'Support Téléphone Magnétique Rotatif 360° pour Grille d’Aération',
+          titleAr: 'حامل هاتف مغناطيسي ذكي للسيارة دوار 360 درجة شديد التثبيت',
+          sourceUrl: 'https://amazon.com/dp/magnetic-car-mount',
+          sourcePlatform: 'Amazon FBA Source',
+          originalUsd: 4.10,
+          exchangeRate: 236.5,
+          costDzd: 970,
+          margin: 60,
+          shippingDzd: 400,
+          packagingDzd: 80,
+          finalPriceDzd: 2150,
+          originalPriceCrossed: 2900,
+          status: 'ready',
+          wilayaHub: '09 - Blida',
+          codReady: true,
+          image: 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?auto=format&fit=crop&w=400&q=80',
+          specs: ['Aimants N52 puissants', 'Rotation sphérique', 'Compatible MagSafe & universel'],
+          rating: 4.7,
+          targetAudience: 'Chauffeurs VTC Yassir/Heetch, automobilistes'
+        }
+      ],
+
+      isScraping: false,
+      scrapeStep: ''
+    };
+
+    // ==========================================
+    // TOAST SYSTEM
+    // ==========================================
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium border backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto ${
+        type === 'success' 
+          ? 'bg-emerald-950/90 text-emerald-200 border-emerald-500/40 shadow-emerald-950/50' 
+          : type === 'warning'
+          ? 'bg-amber-950/90 text-amber-200 border-amber-500/40 shadow-amber-950/50'
+          : 'bg-rose-950/90 text-rose-200 border-rose-500/40 shadow-rose-950/50'
+      }`;
+
+      const icon = type === 'success' ? '✓' : type === 'warning' ? '⚠' : '✕';
+      toast.innerHTML = `
+        <span class="flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
+          type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+        }">${icon}</span>
+        <span>${message}</span>
+      `;
+
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+        toast.classList.add('translate-y-0', 'opacity-100');
+      });
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('-translate-y-2', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    // ==========================================
+    // ACTIONS & MUTATIONS
+    // ==========================================
+    function setAuthMode(mode) {
+      state.authMode = mode;
+      renderApp();
+    }
+
+    function loginUser(e) {
+      if (e) e.preventDefault();
+      state.isAuthenticated = true;
+      showToast('Bienvenue sur CatalogFlow ! Session initialisée.', 'success');
+      renderApp();
+    }
+
+    function logoutUser() {
+      state.isAuthenticated = false;
+      showToast('Déconnexion réussie.', 'success');
+      renderApp();
+    }
+
+    function switchTab(tabId) {
+      state.currentTab = tabId;
+      renderApp();
+    }
+
+    function switchStoreTab(platform) {
+      state.activeStoreTab = platform;
+      renderApp();
+    }
+
+    function connectStore(platform) {
+      const inputId = platform === 'shopify' ? 'shopifyDomain' : 'youcanSlug';
+      const domainElem = document.getElementById(inputId);
+      const domain = domainElem && domainElem.value.trim() 
+        ? domainElem.value.trim() 
+        : (platform === 'shopify' ? 'mon-magasin-algerie.myshopify.com' : 'dz-shop-premium.youcan.shop');
+      
+      const btn = document.getElementById(`btnConnect${platform}`);
+      if (btn) {
+        btn.innerHTML = `
+          <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-        </div>
-        <div>
-          <h1 class="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
-            <span>Web3 Liquidity Agent</span>
-            <span class="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800/60 px-1.5 py-0.5 rounded font-mono">ETHERS.JS V6 LIVE</span>
-          </h1>
-          <div class="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
-            <span>Target:</span>
-            <span class="text-emerald-400 font-semibold">$50.00 – $150.00/day</span>
-          </div>
-        </div>
-      </div>
+          Vérification API & Handshake en cours...
+        `;
+        btn.disabled = true;
+      }
 
-      <div class="flex items-center gap-2">
-        <button id="btn-toggle-daemon" onclick="toggleAutonomousLoop()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm bg-cyan-600 hover:bg-cyan-500 text-white whitespace-nowrap">
-          <svg id="daemon-icon-play" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M8 5v14l11-7z"/>
-          </svg>
-          <span id="daemon-btn-label">Start Daemon</span>
-        </button>
-      </div>
-    </div>
-  </header>
+      setTimeout(() => {
+        const newStore = {
+          id: 'store_' + Date.now(),
+          platform: platform,
+          name: domain,
+          status: 'connected',
+          lastSync: 'À l’instant',
+          productsCount: 0,
+          currency: 'DZD',
+          verifiedAt: new Date().toISOString().split('T')[0]
+        };
 
-  <!-- Real-time Live Network Telemetry Banner -->
-  <div class="bg-cyan-950/40 border-b border-cyan-900/50 px-4 py-2 text-xs font-mono">
-    <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2 text-[11px]">
-      <div class="flex items-center gap-2 text-slate-300">
-        <span id="rpc-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span class="text-slate-400">Network:</span>
-        <span id="rpc-network-name" class="text-cyan-300 font-semibold">Polygon Mainnet (Chain ID: 137)</span>
-      </div>
-      <div class="flex items-center gap-4 text-slate-400">
-        <div>Live Block: <span id="rpc-block-number" class="text-slate-200 font-semibold">Connecting...</span></div>
-        <div>Gas: <span id="rpc-gas-price" class="text-emerald-400 font-semibold">Syncing...</span></div>
-        <div>Active RPC: <span id="rpc-active-node" class="text-slate-300">polygon-bor-rpc</span></div>
-        <div>Provider: <span class="text-cyan-300 font-semibold">Aave V3 Flash Pool</span></div>
-      </div>
-    </div>
-  </div>
+        state.connectedStores.push(newStore);
+        showToast(`Boutique ${platform === 'shopify' ? 'Shopify' : 'YouCan'} connectée avec succès !`, 'success');
+        state.currentTab = 'scraper';
+        renderApp();
+      }, 1100);
+    }
 
-  <!-- Mobile Navigation Tabs -->
-  <div class="border-b border-slate-800/80 bg-slate-900/60 px-4 py-2 sticky top-[57px] z-30">
-    <div class="max-w-6xl mx-auto flex items-center gap-1 overflow-x-auto no-scrollbar text-xs">
-      <button onclick="switchTab('pipeline')" id="tab-pipeline" class="tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap bg-slate-800 text-white">
-        Arbitrage Pipeline
-      </button>
-      <button onclick="switchTab('feed')" id="tab-feed" class="tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap text-slate-400 hover:text-white">
-        Live Pools
-      </button>
-      <button onclick="switchTab('ingest')" id="tab-ingest" class="tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap text-slate-400 hover:text-white">
-        RPC Simulator
-      </button>
-      <button onclick="switchTab('ledger')" id="tab-ledger" class="tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap text-slate-400 hover:text-white">
-        USDT Settlement Ledger
-      </button>
-      <button onclick="switchTab('credentials')" id="tab-credentials" class="tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap text-slate-400 hover:text-white">
-        Keys & Web3 Safe
-      </button>
-    </div>
-  </div>
+    function calculateEstimatedDzd(usd, rate, marginPct, wilayaCode, deliveryType, packagingCost) {
+      const wilaya = ALGERIAN_WILAYAS.find(w => w.code === wilayaCode) || ALGERIAN_WILAYAS[15];
+      const deliveryFee = wilaya[deliveryType] || 500;
+      const baseCostDzd = Math.round(usd * rate);
+      const grossSellingPrice = Math.round(baseCostDzd * (1 + marginPct / 100));
+      const totalSuggestedDzd = grossSellingPrice + deliveryFee + packagingCost;
+      const roundedDzd = Math.ceil(totalSuggestedDzd / 50) * 50;
 
-  <!-- Revenue HUD: Target Progress Strip -->
-  <section class="bg-slate-900/80 border-b border-slate-800 px-4 py-3.5">
-    <div class="max-w-6xl mx-auto space-y-2.5">
-      <div class="flex items-center justify-between text-xs">
-        <div class="flex items-center gap-1.5 text-slate-300 font-medium">
-          <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
-          <span>Daily Net Settlement Quota</span>
-          <span class="text-slate-500">·</span>
-          <span class="text-slate-400 font-mono text-[11px]">$50.00 – $150.00 Target</span>
-        </div>
-        <div class="font-mono text-xs tabular-nums font-bold">
-          <span id="hud-current-earnings" class="text-emerald-400 text-sm">$84.60</span>
-          <span class="text-slate-500"> / $150.00 USDT</span>
-        </div>
-      </div>
+      return {
+        baseCostDzd,
+        grossSellingPrice,
+        deliveryFee,
+        totalSuggestedDzd: roundedDzd,
+        wilaya
+      };
+    }
 
-      <!-- Target Progress Bar -->
-      <div class="relative w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
-        <div class="absolute top-0 bottom-0 w-0.5 bg-slate-500 z-10" style="left: 33.33%;" title="Minimum Target: $50 USDT"></div>
-        <div id="hud-progress-bar" class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-500 rounded-full" style="width: 56.4%;"></div>
-      </div>
+    function setRatePreset(type) {
+      state.scraperForm.rateType = type;
+      if (type === 'parallel') {
+        state.scraperForm.exchangeRate = state.currentUser.marketRate;
+      } else if (type === 'official') {
+        state.scraperForm.exchangeRate = state.currentUser.officialRate;
+      }
+      renderApp();
+    }
 
-      <!-- Metric Pills Grid -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-[11px]">
-        <div class="bg-slate-950 p-2 rounded-lg border border-slate-800">
-          <div class="text-slate-500 text-[10px]">Zero-Human Filter</div>
-          <div class="text-emerald-400 font-semibold flex items-center gap-1">
-            <span>✓ 100% Programmatic</span>
-          </div>
-        </div>
-        <div class="bg-slate-950 p-2 rounded-lg border border-slate-800">
-          <div class="text-slate-500 text-[10px]">Executed / Aborted</div>
-          <div class="text-slate-200 font-semibold">
-            <span id="hud-resolved-count" class="text-emerald-400">1</span> / <span id="hud-aborted-count" class="text-rose-400">0</span>
-          </div>
-        </div>
-        <div class="bg-slate-950 p-2 rounded-lg border border-slate-800">
-          <div class="text-slate-500 text-[10px]">Daemon Mode</div>
-          <div id="hud-daemon-status" class="text-slate-400 font-semibold flex items-center gap-1">
-            <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-            <span>STANDBY</span>
-          </div>
-        </div>
-        <div class="bg-slate-950 p-2 rounded-lg border border-slate-800">
-          <div class="text-slate-500 text-[10px]">Recipient Wallet</div>
-          <div id="hud-wallet-address" class="text-slate-300 font-semibold truncate text-[10px]" title="0x992B1cE0E738b55694c9Cda13251a37c95b6cFe1">
-            0x992B...cFe1
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+    function triggerAiScrape() {
+      const urlInput = document.getElementById('scraperUrl');
+      const targetUrl = urlInput ? urlInput.value.trim() : state.scraperForm.url;
 
-  <!-- Main Viewports -->
-  <main class="flex-1 max-w-6xl w-full mx-auto p-4 space-y-4">
+      if (!targetUrl) {
+        showToast('Veuillez saisir une URL de produit valide (AliExpress, CJ, Amazon...)', 'warning');
+        return;
+      }
 
-    <!-- 1. OPERATIONS PIPELINE VIEW -->
-    <section id="view-pipeline" class="space-y-4">
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
-              <span id="current-task-id" class="font-mono text-cyan-400 font-semibold">ROUTE-USDC-USDT-AAVE</span>
-              <span>·</span>
-              <span id="current-task-source">POLYGON_BOR_RPC</span>
-              <span>·</span>
-              <span id="current-task-bounty" class="text-emerald-400 font-mono font-bold">+$84.60 USDT Net</span>
+      state.isScraping = true;
+      state.scrapeStep = 'Analyse de la fiche produit & extraction DOM...';
+      renderApp();
+
+      setTimeout(() => {
+        state.scrapeStep = 'Nettoyage des filigranes & optimisation photos HD...';
+        renderApp();
+      }, 900);
+
+      setTimeout(() => {
+        state.scrapeStep = 'Traduction neuronale en Français & Arabe Darija (COD Algérie)...';
+        renderApp();
+      }, 1900);
+
+      setTimeout(() => {
+        state.scrapeStep = 'Calcul de rentabilité DZD & intégration grille 58 Wilayas...';
+        renderApp();
+      }, 2800);
+
+      setTimeout(() => {
+        const usd = state.scraperForm.usdPrice;
+        const rate = state.scraperForm.exchangeRate;
+        const margin = state.scraperForm.profitMargin;
+        const wilaya = state.scraperForm.targetWilaya;
+        const deliveryType = state.scraperForm.deliveryType;
+        const packaging = state.scraperForm.includePackaging;
+
+        const calc = calculateEstimatedDzd(usd, rate, margin, wilaya, deliveryType, packaging);
+
+        const newDraft = {
+          id: 'draft_' + Date.now(),
+          titleFr: 'Kit Lampe Solaire LED Extérieure avec Détecteur de Mouvement IP65',
+          titleAr: 'مصباح الطاقة الشمسية الخارجي فائق الإضاءة مع مستشعر الحركة ومقاوم للماء',
+          sourceUrl: targetUrl,
+          sourcePlatform: targetUrl.includes('aliexpress') ? 'AliExpress' : 'Global Source',
+          originalUsd: usd,
+          exchangeRate: rate,
+          costDzd: calc.baseCostDzd,
+          margin: margin,
+          shippingDzd: calc.deliveryFee,
+          packagingDzd: packaging,
+          finalPriceDzd: calc.totalSuggestedDzd,
+          originalPriceCrossed: Math.round(calc.totalSuggestedDzd * 1.35),
+          status: 'ready',
+          wilayaHub: `${calc.wilaya.code} - ${calc.wilaya.name}`,
+          codReady: true,
+          image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=400&q=80',
+          specs: [
+            'Batterie Li-ion 2400mAh intégrée',
+            'Portée de détection 5 à 8 mètres',
+            'Certification étanche IP65 spécial climat DZ',
+            'Télécommande multi-modes incluse'
+          ],
+          rating: 4.85,
+          targetAudience: 'Villas, jardins, cours, sécurité nocturne'
+        };
+
+        state.drafts.unshift(newDraft);
+        state.isScraping = false;
+        state.scrapeStep = '';
+        state.currentTab = 'drafts';
+        
+        showToast('Produit extrait, nettoyé et traduit en DZD avec succès !', 'success');
+        renderApp();
+      }, 3600);
+    }
+
+    function publishDraft(draftId, platform) {
+      const draft = state.drafts.find(d => d.id === draftId);
+      if (!draft) return;
+
+      const storeName = platform === 'shopify' ? 'Shopify (algeria-tech-store)' : 'YouCan (dz-tendances)';
+      showToast(`Publication vers ${storeName} en DZD en cours...`, 'success');
+      
+      setTimeout(() => {
+        draft.status = 'published';
+        const store = state.connectedStores.find(s => s.platform === platform);
+        if (store) store.productsCount += 1;
+        showToast(`Produit synchronisé sur ${platform.toUpperCase()} avec succès ! 🚀`, 'success');
+        renderApp();
+      }, 800);
+    }
+
+    function deleteDraft(draftId) {
+      state.drafts = state.drafts.filter(d => d.id !== draftId);
+      showToast('Brouillon supprimé du catalogue.', 'warning');
+      renderApp();
+    }
+
+    function fillScraperSample(type) {
+      if (type === 'smart') {
+        state.scraperForm.url = 'https://www.aliexpress.com/item/1005007429103982.html';
+        state.scraperForm.usdPrice = 14.80;
+        state.scraperForm.profitMargin = 50;
+      } else if (type === 'gadget') {
+        state.scraperForm.url = 'https://cjdropshipping.com/product/mini-projecteur-4k-portable';
+        state.scraperForm.usdPrice = 32.00;
+        state.scraperForm.profitMargin = 40;
+      } else if (type === 'beauty') {
+        state.scraperForm.url = 'https://amazon.com/dp/brosse-soufflante-ionique-dz';
+        state.scraperForm.usdPrice = 9.20;
+        state.scraperForm.profitMargin = 60;
+      }
+      renderApp();
+      showToast('Modèle d’exemple pré-rempli pour test rapide.', 'success');
+    }
+
+    // ==========================================
+    // RENDER FUNCTIONS
+    // ==========================================
+    function renderApp() {
+      const app = document.getElementById('app');
+      if (!state.isAuthenticated) {
+        app.innerHTML = renderAuthScreen();
+      } else {
+        app.innerHTML = renderDashboardShell();
+      }
+    }
+
+    // --- 1. AUTHENTICATION SCREEN ---
+    function renderAuthScreen() {
+      const isLogin = state.authMode === 'login';
+      return `
+        <div class="relative min-h-screen flex items-center justify-center p-4 bg-slate-950 overflow-hidden">
+          <div class="absolute -top-40 -left-40 w-96 h-96 bg-brand-600/20 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-7xl h-full bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-20 pointer-events-none"></div>
+
+          <div class="relative w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-3xl p-8 shadow-2xl backdrop-blur-xl">
+            <div class="flex items-center justify-between mb-8">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center font-black text-white text-lg shadow-lg shadow-brand-500/30">
+                  CF
+                </div>
+                <div>
+                  <h1 class="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                    CatalogFlow <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-brand-400 font-semibold">DZ E-Com</span>
+                  </h1>
+                  <p class="text-xs text-slate-400">Hub E-commerce & COD Algérie</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/40 text-[11px] text-emerald-400 font-medium">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Square: 236.5 DA
+              </div>
             </div>
-            <h2 id="current-task-title" class="text-sm font-bold text-white tracking-tight">
-              Aave V3 Flash Borrow (100,000 USDT) &rarr; QuickSwap &rarr; SushiSwap Arbitrage
+
+            <div class="grid grid-cols-2 p-1 bg-slate-950/80 rounded-2xl border border-slate-800 mb-6">
+              <button 
+                onclick="setAuthMode('login')"
+                class="py-2.5 text-xs font-semibold rounded-xl transition-all ${
+                  isLogin 
+                    ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30' 
+                    : 'text-slate-400 hover:text-slate-200'
+                }"
+              >
+                Connexion
+              </button>
+              <button 
+                onclick="setAuthMode('signup')"
+                class="py-2.5 text-xs font-semibold rounded-xl transition-all ${
+                  !isLogin 
+                    ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30' 
+                    : 'text-slate-400 hover:text-slate-200'
+                }"
+              >
+                Créer un compte
+              </button>
+            </div>
+
+            <div class="mb-6">
+              <h2 class="text-lg font-bold text-white">
+                ${isLogin ? 'Accédez à votre espace marchand' : 'Commencez à importer vos produits'}
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">
+                ${isLogin 
+                  ? 'Connectez vos boutiques Shopify, YouCan et calculez vos marges en Dinars.' 
+                  : 'Bénéficiez du scraper intelligent adapté aux 58 Wilayas et au COD.'}
+              </p>
+            </div>
+
+            <form onsubmit="loginUser(event)" class="space-y-4">
+              ${!isLogin ? `
+                <div>
+                  <label class="block text-xs font-medium text-slate-300 mb-1.5">Nom ou Boutique</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Alger Dropship Pro" 
+                    value="Alger E-Com Store" 
+                    class="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all"
+                  />
+                </div>
+              ` : ''}
+
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1.5">Adresse Email</label>
+                <input 
+                  type="email" 
+                  value="amine.ecom@catalogflow.dz" 
+                  placeholder="votre.email@domaine.dz" 
+                  class="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all"
+                />
+              </div>
+
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="block text-xs font-medium text-slate-300">Mot de passe</label>
+                  ${isLogin ? '<a href="javascript:void(0)" class="text-[11px] text-brand-400 hover:underline">Mot de passe oublié ?</a>' : ''}
+                </div>
+                <input 
+                  type="password" 
+                  value="********" 
+                  class="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-all"
+                />
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-[11px] text-slate-400 flex items-start gap-2">
+                <span class="text-brand-400 font-bold mt-0.5">ℹ</span>
+                <span>Mode démonstration actif : cliquez directement pour explorer l'ensemble de la suite sans validation serveur.</span>
+              </div>
+
+              <button 
+                type="submit"
+                class="w-full py-3 px-4 bg-gradient-to-r from-brand-600 to-emerald-500 hover:from-brand-500 hover:to-emerald-400 text-white font-semibold text-sm rounded-xl shadow-lg shadow-brand-600/25 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+              >
+                <span>${isLogin ? 'Se connecter à CatalogFlow' : 'Créer mon compte vendeur'}</span>
+                <span>→</span>
+              </button>
+            </form>
+
+            <div class="mt-4 pt-4 border-t border-slate-800/80 text-center">
+              <button 
+                onclick="loginUser()"
+                class="text-xs text-brand-400 hover:text-brand-300 font-medium underline flex items-center justify-center gap-1 mx-auto"
+              >
+                <span>Accès instantané 1-Clic (Bypass rapide)</span>
+              </button>
+            </div>
+
+            <div class="mt-6 grid grid-cols-3 gap-2 text-center pt-4 border-t border-slate-800/60">
+              <div class="p-2 rounded-lg bg-slate-950/40">
+                <div class="text-[10px] text-slate-400">Stores</div>
+                <div class="text-xs font-bold text-slate-200 mt-0.5">Shopify & YouCan</div>
+              </div>
+              <div class="p-2 rounded-lg bg-slate-950/40">
+                <div class="text-[10px] text-slate-400">Taux Devise</div>
+                <div class="text-xs font-bold text-emerald-400 mt-0.5">USD → DZD Direct</div>
+              </div>
+              <div class="p-2 rounded-lg bg-slate-950/40">
+                <div class="text-[10px] text-slate-400">Logistique</div>
+                <div class="text-xs font-bold text-slate-200 mt-0.5">58 Wilayas COD</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // --- 2. SHELL LAYOUT DASHBOARD ---
+    function renderDashboardShell() {
+      const totalImported = state.connectedStores.reduce((acc, curr) => acc + curr.productsCount, 0) + state.drafts.length;
+      const activeStoresCount = state.connectedStores.length;
+      
+      return `
+        <!-- Top Navigation Bar -->
+        <header class="h-16 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 flex items-center justify-between">
+          <div class="flex items-center gap-6">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('dashboard')">
+              <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center font-extrabold text-white text-sm shadow-md shadow-brand-500/20">
+                CF
+              </div>
+              <div>
+                <span class="font-extrabold text-white tracking-tight flex items-center gap-1.5 text-base">
+                  CatalogFlow <span class="text-base">🇩🇿</span>
+                </span>
+                <span class="text-[10px] text-brand-400 font-semibold block leading-none">ALGERIAN E-COM OPS</span>
+              </div>
+            </div>
+
+            <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+              <span class="text-slate-400">Taux Square (USD/DZD):</span>
+              <span class="font-bold text-emerald-400">1$ = ${state.currentUser.marketRate} DA</span>
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button 
+              onclick="switchTab('scraper')"
+              class="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-emerald-500 hover:from-brand-500 hover:to-emerald-400 text-white text-xs font-bold shadow-md shadow-brand-600/20 transition-all"
+            >
+              <span>+ Nouveau Scrape</span>
+            </button>
+
+            <div class="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-xs text-slate-300">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span>2 Boutiques Connectées</span>
+            </div>
+
+            <div class="flex items-center gap-3 pl-2 border-l border-slate-800">
+              <div class="text-right hidden sm:block">
+                <div class="text-xs font-bold text-white leading-tight">${state.currentUser.name}</div>
+                <div class="text-[10px] text-slate-400 leading-tight">Alger, Wilaya 16</div>
+              </div>
+              <img 
+                src="${state.currentUser.avatar}" 
+                alt="Avatar" 
+                class="w-9 h-9 rounded-xl object-cover ring-2 ring-brand-500/30"
+              />
+              <button 
+                onclick="logoutUser()"
+                title="Déconnexion"
+                class="p-2 rounded-xl bg-slate-800/60 hover:bg-rose-950/50 hover:text-rose-400 text-slate-400 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <!-- Main Workspace Shell: Sidebar + Content -->
+        <div class="flex-1 flex flex-col md:flex-row">
+          
+          <aside class="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-800/80 bg-slate-900/40 p-4 shrink-0 flex flex-col justify-between">
+            <div class="space-y-1">
+              <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-3 py-2">Menu Principal</div>
+              
+              <button 
+                onclick="switchTab('dashboard')"
+                class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  state.currentTab === 'dashboard' 
+                    ? 'bg-brand-500/10 text-brand-400 border border-brand-500/30' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }"
+              >
+                <div class="flex items-center gap-3">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                  <span>Vue d'ensemble</span>
+                </div>
+              </button>
+
+              <button 
+                onclick="switchTab('scraper')"
+                class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  state.currentTab === 'scraper' 
+                    ? 'bg-brand-500/10 text-brand-400 border border-brand-500/30' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }"
+              >
+                <div class="flex items-center gap-3">
+                  <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                  <span>Scraper & Traducteur</span>
+                </div>
+                <span class="px-1.5 py-0.5 text-[10px] rounded-md bg-emerald-500/20 text-emerald-300 font-bold">IA</span>
+              </button>
+
+              <button 
+                onclick="switchTab('drafts')"
+                class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  state.currentTab === 'drafts' 
+                    ? 'bg-brand-500/10 text-brand-400 border border-brand-500/30' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }"
+              >
+                <div class="flex items-center gap-3">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                  <span>Prêts pour Révision</span>
+                </div>
+                <span class="px-2 py-0.5 text-[10px] rounded-full bg-slate-800 text-slate-300 font-bold">${state.drafts.length}</span>
+              </button>
+
+              <button 
+                onclick="switchTab('connect')"
+                class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  state.currentTab === 'connect' 
+                    ? 'bg-brand-500/10 text-brand-400 border border-brand-500/30' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }"
+              >
+                <div class="flex items-center gap-3">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                  <span>Connecter Storefront</span>
+                </div>
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              </button>
+
+              <button 
+                onclick="switchTab('wilayas')"
+                class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  state.currentTab === 'wilayas' 
+                    ? 'bg-brand-500/10 text-brand-400 border border-brand-500/30' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }"
+              >
+                <div class="flex items-center gap-3">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                  <span>58 Wilayas & Tarifs COD</span>
+                </div>
+                <span class="text-[10px] text-slate-400">58</span>
+              </button>
+            </div>
+
+            <div class="mt-6 p-3.5 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[11px] font-bold text-slate-300">Statut Réseau COD</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Optimal</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mb-2">
+                Intégration directe avec les formats d'étiquettes Yalidine, ZR Express et Maystro Delivery.
+              </p>
+              <div class="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-slate-800">
+                <span>Shopify API v2026</span>
+                <span>YouCan v2 Ready</span>
+              </div>
+            </div>
+          </aside>
+
+          <!-- Main Dynamic View Area -->
+          <main class="flex-1 p-4 md:p-8 bg-slate-950 overflow-y-auto">
+            ${
+              state.currentTab === 'dashboard' ? renderOverviewTab(totalImported, activeStoresCount) :
+              state.currentTab === 'connect' ? renderConnectStorefrontTab() :
+              state.currentTab === 'scraper' ? renderScraperTab() :
+              state.currentTab === 'drafts' ? renderDraftsTab() :
+              renderWilayasTab()
+            }
+          </main>
+        </div>
+      `;
+    }
+
+    // --- 2.1 OVERVIEW TAB ---
+    function renderOverviewTab(totalImported, activeStoresCount) {
+      return `
+        <div class="max-w-6xl mx-auto space-y-8">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                Tableau de Bord Marchand
+                <span class="text-xs px-2.5 py-1 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-400 font-bold">Algérie Direct</span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">Supervisez vos flux d'importation, vos boutiques synchronisées et vos calculs de marge COD.</p>
+            </div>
+            
+            <div class="flex items-center gap-2.5">
+              <button 
+                onclick="switchTab('scraper')"
+                class="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold transition-all shadow-lg shadow-brand-600/20 flex items-center gap-2"
+              >
+                <span>⚡ Lancer un Scrape Rapide</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Key Stats Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 relative overflow-hidden group hover:border-slate-700 transition-all">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-medium text-slate-400">Produits Importés</span>
+                <div class="w-8 h-8 rounded-xl bg-brand-500/10 text-brand-400 flex items-center justify-center font-bold">
+                  📦
+                </div>
+              </div>
+              <div class="text-3xl font-extrabold text-white tracking-tight">${totalImported}</div>
+              <div class="flex items-center gap-1.5 mt-2 text-[11px] text-emerald-400">
+                <span>↑ +18 cette semaine</span>
+                <span class="text-slate-500">· 100% catalogués</span>
+              </div>
+            </div>
+
+            <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 relative overflow-hidden group hover:border-slate-700 transition-all">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-medium text-slate-400">Configuration Active</span>
+                <div class="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold">
+                  ⚡
+                </div>
+              </div>
+              <div class="text-base font-bold text-white tracking-tight truncate">Shopify & YouCan DZ</div>
+              <div class="flex items-center gap-1.5 mt-2 text-[11px] text-emerald-400">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span>${activeStoresCount} Boutiques synchronisées</span>
+              </div>
+            </div>
+
+            <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 relative overflow-hidden group hover:border-slate-700 transition-all">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-medium text-slate-400">Taux USD → DZD Parallèle</span>
+                <div class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold">
+                  💵
+                </div>
+              </div>
+              <div class="text-3xl font-extrabold text-white tracking-tight">${state.currentUser.marketRate} <span class="text-sm font-normal text-slate-400">DA</span></div>
+              <div class="flex items-center gap-1.5 mt-2 text-[11px] text-slate-400">
+                <span>Square Port-Saïd (Aujourd'hui)</span>
+              </div>
+            </div>
+
+            <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 relative overflow-hidden group hover:border-slate-700 transition-all">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-medium text-slate-400">Marge Brute Moyenne</span>
+                <div class="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold">
+                  📈
+                </div>
+              </div>
+              <div class="text-3xl font-extrabold text-white tracking-tight">+48.2%</div>
+              <div class="flex items-center gap-1.5 mt-2 text-[11px] text-emerald-400">
+                <span>Frais COD inclus d'office</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Connected Channels & Quick Launch -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 p-6 rounded-3xl bg-slate-900/80 border border-slate-800">
+              <div class="flex items-center justify-between mb-5">
+                <div>
+                  <h3 class="text-base font-bold text-white">Boutiques E-Commerce Connectées</h3>
+                  <p class="text-xs text-slate-400">Canaux de vente actifs pour la synchronisation automatique des catalogues.</p>
+                </div>
+                <button 
+                  onclick="switchTab('connect')" 
+                  class="text-xs text-brand-400 hover:text-brand-300 font-semibold flex items-center gap-1"
+                >
+                  <span>Gérer les clés API</span>
+                  <span>→</span>
+                </button>
+              </div>
+
+              <div class="space-y-3">
+                ${state.connectedStores.map(store => `
+                  <div class="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between hover:border-slate-700 transition-all">
+                    <div class="flex items-center gap-3.5">
+                      <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${
+                        store.platform === 'shopify' ? 'bg-[#95bf47]/20 text-[#95bf47]' : 'bg-[#00b074]/20 text-[#00b074]'
+                      }">
+                        ${store.platform === 'shopify' ? 'SP' : 'YC'}
+                      </div>
+                      <div>
+                        <div class="text-sm font-bold text-white flex items-center gap-2">
+                          <span>${store.name}</span>
+                          <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${
+                            store.platform === 'shopify' ? 'bg-[#95bf47]/10 text-[#95bf47]' : 'bg-[#00b074]/10 text-[#00b074]'
+                          }">${store.platform}</span>
+                        </div>
+                        <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-3">
+                          <span>${store.productsCount} Produits en rayon</span>
+                          <span>·</span>
+                          <span>Dernière synchro: ${store.lastSync}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                      <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/40 flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                        Connecté
+                      </span>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <div class="p-6 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 flex flex-col justify-between">
+              <div>
+                <div class="w-10 h-10 rounded-2xl bg-brand-500/10 text-brand-400 flex items-center justify-center font-bold text-lg mb-4">
+                  💡
+                </div>
+                <h3 class="text-base font-bold text-white">Guide Rapide Marchand DZ</h3>
+                <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+                  1. Collez n'importe quel lien produit (AliExpress, CJ, etc.) dans le scraper.<br><br>
+                  2. Le moteur convertit le prix de revient en Dinars selon le cours réel du Square Port-Saïd.<br><br>
+                  3. L'intelligence artificielle traduit la fiche en Français et Arabe Darija optimisée pour le Paiement à la Livraison (COD).
+                </p>
+              </div>
+
+              <div class="mt-6 pt-4 border-t border-slate-800">
+                <button 
+                  onclick="switchTab('scraper')"
+                  class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all text-center block"
+                >
+                  Tester le Scraper Maintenant
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Ready Drafts Preview -->
+          <div class="p-6 rounded-3xl bg-slate-900/80 border border-slate-800">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3 class="text-base font-bold text-white">Fiches Récemment Préparées</h3>
+                <p class="text-xs text-slate-400">Brouillons prêts pour révision et publication en 1 clic.</p>
+              </div>
+              <button 
+                onclick="switchTab('drafts')" 
+                class="text-xs text-brand-400 hover:text-brand-300 font-semibold"
+              >
+                Voir tous les brouillons (${state.drafts.length}) →
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              ${state.drafts.slice(0, 3).map(draft => `
+                <div class="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col justify-between">
+                  <div>
+                    <img src="${draft.image}" alt="${draft.titleFr}" class="w-full h-36 object-cover rounded-xl mb-3" />
+                    <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                      <span class="text-emerald-400 font-semibold">${draft.sourcePlatform}</span>
+                      <span>Hub: ${draft.wilayaHub}</span>
+                    </div>
+                    <h4 class="text-xs font-bold text-white line-clamp-2 mb-1">${draft.titleFr}</h4>
+                    <p class="text-xs text-slate-300 font-ar line-clamp-1 mb-2 text-right">${draft.titleAr}</p>
+                  </div>
+                  
+                  <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                    <div>
+                      <div class="text-[10px] text-slate-400">Prix Vente Suggéré</div>
+                      <div class="text-sm font-extrabold text-emerald-400">${draft.finalPriceDzd.toLocaleString()} DA</div>
+                    </div>
+                    <button 
+                      onclick="publishDraft('${draft.id}', 'youcan')"
+                      class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md"
+                    >
+                      Publier YouCan
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+        </div>
+      `;
+    }
+
+    // --- 2.2 CONNECT STOREFRONT TAB (Shopify & YouCan) ---
+    function renderConnectStorefrontTab() {
+      const isShopify = state.activeStoreTab === 'shopify';
+      
+      return `
+        <div class="max-w-4xl mx-auto space-y-8">
+          <div>
+            <h2 class="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+              Connecter Vos Boutiques E-Commerce
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 font-medium">Boutiques Multiples</span>
             </h2>
-            <p id="current-task-spec" class="text-xs text-slate-400 mt-1 line-clamp-2">
-              Borrow 100,000 USDT with zero upfront collateral. Swap on QuickSwap for USDC at 1.0012, swap back on SushiSwap at 0.9998, repay 100,050 USDT (0.05% protocol premium) in single atomic block.
+            <p class="text-xs text-slate-400 mt-1">
+              Synchronisez votre compte CatalogFlow avec votre boutique Shopify ou YouCan. Vos produits s'importeront avec les prix en Dinars (DZD) et le formulaire COD.
             </p>
           </div>
 
-          <div class="flex items-center gap-2 shrink-0">
-            <select id="select-task" onchange="onSelectTaskChange(this.value)" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-2 outline-none font-mono">
-              <option value="0">[PROFITABLE] QuickSwap &rarr; SushiSwap ($84.60 Net)</option>
-              <option value="1">[PROHIBITED] Inverted Spread (-$12.40 Loss - REJECTED)</option>
-              <option value="2">[PROFITABLE] WETH/USDT Micro-Spread ($18.20 Net)</option>
-              <option value="3">[PROHIBITED] High Slippage Route (0.8% - REJECTED)</option>
-              <option value="4">[PROFITABLE] Polygon Aave &rarr; Uniswap V3 ($72.80 Net)</option>
-              <option value="5">[PROHIBITED] Insufficient Pool Depth (REJECTED)</option>
-            </select>
-            <button onclick="runPipelineOnCurrentTask()" class="px-3.5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold whitespace-nowrap shadow-sm flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              <span>Execute Route</span>
+          <div class="grid grid-cols-2 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl max-w-md">
+            <button 
+              onclick="switchStoreTab('shopify')"
+              class="py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                isShopify 
+                  ? 'bg-slate-800 text-white shadow-md border border-slate-700' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }"
+            >
+              <div class="w-4 h-4 rounded-full bg-[#95bf47] flex items-center justify-center text-[10px] text-slate-950 font-black">S</div>
+              <span>Shopify Store</span>
+            </button>
+            <button 
+              onclick="switchStoreTab('youcan')"
+              class="py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                !isShopify 
+                  ? 'bg-slate-800 text-white shadow-md border border-slate-700' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }"
+            >
+              <div class="w-4 h-4 rounded-full bg-[#00b074] flex items-center justify-center text-[10px] text-white font-black">Y</div>
+              <span>YouCan.shop (DZ)</span>
             </button>
           </div>
-        </div>
-      </div>
 
-      <!-- 4-Phase Grid Visualizer -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <!-- Phase 1: Scout -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-2">
-          <div class="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
-            <span class="font-bold text-white flex items-center gap-1.5">
-              <span class="font-mono text-cyan-400">01</span> Scout RPC
-            </span>
-            <span class="text-[10px] font-mono text-emerald-400">LIVE FEED</span>
-          </div>
-          <div class="space-y-1 text-xs">
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Mempool RPC:</span> <span id="scout-rpc-label" class="font-mono text-slate-300">polygon-bor-rpc</span></div>
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Gross Spread:</span> <span id="scout-bounty" class="font-mono text-emerald-400">+0.14% Spread</span></div>
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Flash Loan:</span> <span class="font-mono text-cyan-400">100,000 USDT</span></div>
-          </div>
-        </div>
+          <div class="p-8 rounded-3xl bg-slate-900/90 border border-slate-800 relative">
+            ${isShopify ? `
+              <div class="space-y-6">
+                <div class="flex items-start justify-between border-b border-slate-800 pb-5">
+                  <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-[#95bf47]/20 border border-[#95bf47]/30 flex items-center justify-center text-[#95bf47] text-xl font-black">
+                      S
+                    </div>
+                    <div>
+                      <h3 class="text-base font-bold text-white">Intégration Shopify Admin API</h3>
+                      <p class="text-xs text-slate-400">Synchronisation automatique des produits, variantes et gestion des devises DZD.</p>
+                    </div>
+                  </div>
+                  <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/40">
+                    Prêt pour connexion
+                  </span>
+                </div>
 
-        <!-- Phase 2: Filter (Strict Zero-Human Review & Slippage Check) -->
-        <div id="phase2-card" class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-2">
-          <div class="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
-            <span class="font-bold text-white flex items-center gap-1.5">
-              <span class="font-mono text-cyan-400">02</span> Zero-Human Filter
-            </span>
-            <span id="phase2-badge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">PASSED</span>
-          </div>
-          <div class="space-y-1 text-xs">
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Pre-funded Aave:</span> <span id="filter-prefunded" class="font-mono text-emerald-400">✓ LOCKED</span></div>
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Gas Profit Positive:</span> <span id="filter-algorithmic" class="font-mono text-emerald-400">✓ PASS</span></div>
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Zero Manual Hold:</span> <span class="font-mono text-emerald-400">✓ PASS</span></div>
-          </div>
-        </div>
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Nom de Domaine de la Boutique (.myshopify.com)</label>
+                    <input 
+                      id="shopifyDomain" 
+                      type="text" 
+                      value="dz-trendsetter.myshopify.com" 
+                      placeholder="votre-boutique.myshopify.com" 
+                      class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-all font-mono text-xs"
+                    />
+                  </div>
 
-        <!-- Phase 3: Execute -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-2">
-          <div class="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
-            <span class="font-bold text-white flex items-center gap-1.5">
-              <span class="font-mono text-cyan-400">03</span> Execute Swap
-            </span>
-            <span id="phase3-badge" class="text-[10px] font-mono text-emerald-400">ATOMIC</span>
-          </div>
-          <div class="space-y-1 text-xs">
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Protocol Fee:</span> <span class="font-mono text-slate-400">-50.00 USDT (0.05%)</span></div>
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Estimated Gas:</span> <span id="exec-runtime" class="font-mono text-amber-400">-5.40 USDT</span></div>
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Net Return:</span> <span id="exec-assertions" class="font-mono text-emerald-400 font-bold">+$84.60 Net</span></div>
-          </div>
-        </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Jeton d'Accès Admin (Admin API Access Token)</label>
+                    <input 
+                      id="shopifyToken" 
+                      type="password" 
+                      value="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" 
+                      placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+                      class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-all font-mono text-xs"
+                    />
+                    <p class="text-[11px] text-slate-500 mt-1">Généré depuis Shopify Admin &gt; Paramètres &gt; Développer des applications.</p>
+                  </div>
 
-        <!-- Phase 4: Deliver & Settle -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-2">
-          <div class="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
-            <span class="font-bold text-white flex items-center gap-1.5">
-              <span class="font-mono text-cyan-400">04</span> Instant Payout
-            </span>
-            <span id="phase4-badge" class="text-[10px] font-mono text-emerald-400">SETTLED</span>
-          </div>
-          <div class="space-y-1 text-xs">
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Settlement:</span> <span id="deliver-status" class="font-mono text-emerald-400 font-bold">SUCCESS</span></div>
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Auto-Credited:</span> <span id="deliver-payout" class="font-mono text-slate-200 font-bold">+$84.60 USDT</span></div>
-            <div class="flex justify-between text-[11px]"><span class="text-slate-500">Polygon TX:</span> <span id="deliver-tx" class="font-mono text-cyan-400 text-[10px]">0x3f9a...</span></div>
-          </div>
-        </div>
-      </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-xs font-medium text-slate-300 mb-1.5">Devise d'affichage catalogue</label>
+                      <select class="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white">
+                        <option value="DZD" selected>Dinar Algérien (DZD - DA)</option>
+                        <option value="USD">Dollar Américain (USD - $)</option>
+                        <option value="EUR">Euro (EUR - €)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-medium text-slate-300 mb-1.5">Mode de paiement principal</label>
+                      <select class="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white">
+                        <option selected>Paiement à la livraison (Cash on Delivery - الدفع عند الاستلام)</option>
+                        <option>BaridiMob / Edahabia (En cours de test)</option>
+                      </select>
+                    </div>
+                  </div>
 
-      <!-- Execution Terminal & JSON Output Inspector -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <!-- Structured JSON Response (Prompt Contract) -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
-          <div class="flex items-center justify-between px-3 py-2 bg-slate-950 border-b border-slate-800 text-xs">
-            <div class="flex items-center gap-1.5">
-              <span class="font-semibold text-white">Cron Worker Output Schema</span>
-              <span class="text-slate-500">·</span>
-              <span class="text-cyan-400 font-mono text-[11px]">application/json</span>
+                  <div class="pt-4">
+                    <button 
+                      id="btnConnectshopify" 
+                      onclick="connectStore('shopify')"
+                      class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-brand-500 hover:from-emerald-500 hover:to-brand-400 text-white font-bold text-sm shadow-xl shadow-brand-600/25 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                    >
+                      <span>Vérifier & Connecter la Boutique Shopify</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ` : `
+              <div class="space-y-6">
+                <div class="flex items-start justify-between border-b border-slate-800 pb-5">
+                  <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-[#00b074]/20 border border-[#00b074]/30 flex items-center justify-center text-[#00b074] text-xl font-black">
+                      Y
+                    </div>
+                    <div>
+                      <h3 class="text-base font-bold text-white">Intégration YouCan.shop DZ</h3>
+                      <p class="text-xs text-slate-400">Plateforme favorite des marchands COD en Algérie avec formulaire express 1-clic.</p>
+                    </div>
+                  </div>
+                  <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/40">
+                    Spécial Marché DZ
+                  </span>
+                </div>
+
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Identifiant Boutique YouCan (Slug ou Domaine)</label>
+                    <input 
+                      id="youcanSlug" 
+                      type="text" 
+                      value="algeria-exclusive.youcan.shop" 
+                      placeholder="monmagasin.youcan.shop" 
+                      class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-all font-mono text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Clé Secrète API YouCan (Private API Key)</label>
+                    <input 
+                      id="youcanToken" 
+                      type="password" 
+                      value="yc_sec_8928374981729837198273918237" 
+                      placeholder="yc_sec_xxxxxxxxxxxxxxxxxxxxxxxx" 
+                      class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-all font-mono text-xs"
+                    />
+                    <p class="text-[11px] text-slate-500 mt-1">Disponible dans YouCan Admin &gt; Paramètres &gt; Développeurs &gt; Clés API.</p>
+                  </div>
+
+                  <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 space-y-1">
+                    <div class="font-bold text-emerald-400 flex items-center gap-1.5">
+                      <span>✓ Optimisations YouCan incluses :</span>
+                    </div>
+                    <p class="text-slate-400 text-[11px]">
+                      - Synchronisation de la liste des 58 Wilayas algériennes dans le champ déroulant de commande.<br>
+                      - Remplacement automatique des descriptions par le texte arabe/français sans filigrane fournisseur.
+                    </p>
+                  </div>
+
+                  <div class="pt-4">
+                    <button 
+                      id="btnConnectyoucan" 
+                      onclick="connectStore('youcan')"
+                      class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-brand-500 hover:from-emerald-500 hover:to-brand-400 text-white font-bold text-sm shadow-xl shadow-brand-600/25 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                    >
+                      <span>Vérifier & Connecter la Boutique YouCan</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `}
+          </div>
+
+          <div class="p-6 rounded-3xl bg-slate-900/60 border border-slate-800">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Boutiques Déjà Associées</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              ${state.connectedStores.map(store => `
+                <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                      store.platform === 'shopify' ? 'bg-[#95bf47]/20 text-[#95bf47]' : 'bg-[#00b074]/20 text-[#00b074]'
+                    }">
+                      ${store.platform === 'shopify' ? 'SP' : 'YC'}
+                    </div>
+                    <div>
+                      <div class="text-xs font-bold text-white">${store.name}</div>
+                      <div class="text-[10px] text-slate-400">Statut: Opérationnel · ${store.productsCount} items</div>
+                    </div>
+                  </div>
+                  <span class="text-[11px] text-brand-400 font-semibold">Active</span>
+                </div>
+              `).join('')}
             </div>
-            <button onclick="copyCurrentOutputJson()" class="p-1 text-slate-400 hover:text-white rounded text-[11px] flex items-center gap-1">
-              <span id="copy-json-label">Copy JSON</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // --- 2.3 SMART PRODUCT SCRAPER TAB ---
+    function renderScraperTab() {
+      const form = state.scraperForm;
+      const wilaya = ALGERIAN_WILAYAS.find(w => w.code === form.targetWilaya) || ALGERIAN_WILAYAS[15];
+      const calc = calculateEstimatedDzd(
+        form.usdPrice, 
+        form.exchangeRate, 
+        form.profitMargin, 
+        form.targetWilaya, 
+        form.deliveryType, 
+        form.includePackaging
+      );
+
+      return `
+        <div class="max-w-5xl mx-auto space-y-8">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                Scraper Intelligent & Calculateur DZD
+                <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold">IA & COD</span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">
+                Extrayez n'importe quelle fiche produit, ajustez le taux Square Port-Saïd, appliquez vos marges nettes et traduisez en Darija.
+              </p>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-slate-400 hidden sm:inline">Exemples :</span>
+              <button 
+                onclick="fillScraperSample('smart')"
+                class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-300 hover:text-white hover:border-slate-700"
+              >
+                Lampe Solaire
+              </button>
+              <button 
+                onclick="fillScraperSample('gadget')"
+                class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-300 hover:text-white hover:border-slate-700"
+              >
+                Projecteur HD
+              </button>
+              <button 
+                onclick="fillScraperSample('beauty')"
+                class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-300 hover:text-white hover:border-slate-700"
+              >
+                Brosse Stylée
+              </button>
+            </div>
+          </div>
+
+          ${state.isScraping ? `
+            <div class="p-8 rounded-3xl bg-slate-900 border border-brand-500/40 shadow-2xl text-center space-y-4 animate-pulse">
+              <div class="w-16 h-16 mx-auto rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center text-2xl font-black">
+                ⚡
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-white">Traitement de l'Intelligence Artificielle en cours...</h3>
+                <p class="text-xs text-emerald-400 font-medium mt-1">${state.scrapeStep}</p>
+              </div>
+              <div class="w-full max-w-md mx-auto bg-slate-950 rounded-full h-2 overflow-hidden">
+                <div class="bg-gradient-to-r from-brand-600 to-emerald-400 h-full w-3/4 rounded-full"></div>
+              </div>
+              <p class="text-[11px] text-slate-500">Normalisation des variantes et encodage DZD sans filigranes.</p>
+            </div>
+          ` : ''}
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-7 space-y-6 p-6 rounded-3xl bg-slate-900/90 border border-slate-800">
+              
+              <div>
+                <label class="block text-xs font-semibold text-slate-200 mb-1.5 flex items-center justify-between">
+                  <span>URL du Produit Source (AliExpress, CJ Dropshipping, Amazon, Shein...)</span>
+                  <span class="text-[10px] text-emerald-400 font-normal">Extraction Multi-plateformes</span>
+                </label>
+                <div class="relative">
+                  <input 
+                    id="scraperUrl"
+                    type="url" 
+                    value="${form.url}"
+                    placeholder="https://www.aliexpress.com/item/..." 
+                    class="w-full pl-4 pr-10 py-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 font-mono transition-all"
+                  />
+                  <div class="absolute right-3 top-3 text-slate-500 text-xs">🔗</div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-200 mb-1.5">Prix Fournisseur (USD $)</label>
+                  <div class="relative">
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value="${form.usdPrice}"
+                      oninput="state.scraperForm.usdPrice = parseFloat(this.value) || 0; renderApp();"
+                      class="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm font-bold text-white focus:outline-none focus:border-brand-500"
+                    />
+                    <span class="absolute right-3 top-2.5 text-xs text-slate-400">$ USD</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-200 mb-1.5 flex items-center justify-between">
+                    <span>Taux USD → DZD</span>
+                    <span class="text-[10px] text-brand-400 font-semibold cursor-pointer" onclick="setRatePreset('parallel')">Square: 236.5</span>
+                  </label>
+                  <div class="relative">
+                    <input 
+                      type="number" 
+                      step="0.5" 
+                      value="${form.exchangeRate}"
+                      oninput="state.scraperForm.exchangeRate = parseFloat(this.value) || 0; renderApp();"
+                      class="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm font-bold text-emerald-400 focus:outline-none focus:border-brand-500"
+                    />
+                    <span class="absolute right-3 top-2.5 text-xs text-slate-400">DA / $</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex items-center justify-between text-xs mb-2">
+                  <span class="font-semibold text-slate-200">Marge Bénéficiaire Nette</span>
+                  <span class="text-sm font-extrabold text-brand-400">+${form.profitMargin}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="15" 
+                  max="120" 
+                  step="5" 
+                  value="${form.profitMargin}"
+                  oninput="state.scraperForm.profitMargin = parseInt(this.value); renderApp();"
+                  class="w-full accent-emerald-500 h-2 bg-slate-950 rounded-lg cursor-pointer"
+                />
+                <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+                  <span>15% (Faible)</span>
+                  <span>45% (Recommandé COD Algérie)</span>
+                  <span>100%+ (High Ticket)</span>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-200 mb-1.5">Wilaya Pilote de Référence (58 Provinces)</label>
+                  <select 
+                    onchange="state.scraperForm.targetWilaya = this.value; renderApp();"
+                    class="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-brand-500"
+                  >
+                    ${ALGERIAN_WILAYAS.map(w => `
+                      <option value="${w.code}" ${w.code === form.targetWilaya ? 'selected' : ''}>
+                        ${w.code} - ${w.name} (${w.nameAr})
+                      </option>
+                    `).join('')}
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-200 mb-1.5">Type de Livraison Estimée</label>
+                  <select 
+                    onchange="state.scraperForm.deliveryType = this.value; renderApp();"
+                    class="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-brand-500"
+                  >
+                    <option value="homeCost" ${form.deliveryType === 'homeCost' ? 'selected' : ''}>À Domicile (+${wilaya.homeCost} DA)</option>
+                    <option value="deskCost" ${form.deliveryType === 'deskCost' ? 'selected' : ''}>Stop Desk / Bureau (+${wilaya.deskCost} DA)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="pt-3 border-t border-slate-800 space-y-2">
+                <label class="flex items-center gap-2.5 text-xs text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked class="w-4 h-4 rounded text-brand-600 focus:ring-0 bg-slate-950 border-slate-700" />
+                  <span>Suppression automatique des logos & filigranes fournisseurs chinois</span>
+                </label>
+                <label class="flex items-center gap-2.5 text-xs text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked class="w-4 h-4 rounded text-brand-600 focus:ring-0 bg-slate-950 border-slate-700" />
+                  <span>Générer double titre : Français E-Com + Arabe Darija optimisé pour le COD</span>
+                </label>
+              </div>
+
+              <div class="pt-2">
+                <button 
+                  onclick="triggerAiScrape()"
+                  ${state.isScraping ? 'disabled' : ''}
+                  class="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-brand-600 via-emerald-500 to-teal-400 hover:from-brand-500 hover:to-teal-300 text-white font-extrabold text-sm shadow-xl shadow-brand-600/30 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                >
+                  <span class="text-base">✨</span>
+                  <span>Lancer l'IA : Nettoyer, Traduire & Calculer en DZD</span>
+                </button>
+              </div>
+
+            </div>
+
+            <div class="lg:col-span-5 p-6 rounded-3xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between space-y-6">
+              <div>
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                  <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Calculateur Financier DZD</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">Simulation en Direct</span>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                  <div class="flex justify-between items-center text-slate-300">
+                    <span>Coût Fournisseur USD :</span>
+                    <span class="font-mono font-semibold">$${form.usdPrice.toFixed(2)}</span>
+                  </div>
+                  <div class="flex justify-between items-center text-slate-300">
+                    <span>Taux de Change Appliqué :</span>
+                    <span class="font-mono font-semibold text-emerald-400">1$ = ${form.exchangeRate} DA</span>
+                  </div>
+                  <div class="flex justify-between items-center text-slate-300">
+                    <span>Prix de Revient DZD (Base) :</span>
+                    <span class="font-mono font-bold text-white">${calc.baseCostDzd.toLocaleString()} DA</span>
+                  </div>
+                  <div class="flex justify-between items-center text-slate-300">
+                    <span>Marge Nette Vendeur (+${form.profitMargin}%) :</span>
+                    <span class="font-mono font-bold text-brand-400">+${(calc.grossSellingPrice - calc.baseCostDzd).toLocaleString()} DA</span>
+                  </div>
+                  <div class="flex justify-between items-center text-slate-300">
+                    <span>Livraison Hub (${calc.wilaya.code} - ${calc.wilaya.name}) :</span>
+                    <span class="font-mono font-semibold text-slate-200">+${calc.deliveryFee} DA</span>
+                  </div>
+                  <div class="flex justify-between items-center text-slate-300">
+                    <span>Emballage & Pochette Colis :</span>
+                    <span class="font-mono font-semibold text-slate-200">+${form.includePackaging} DA</span>
+                  </div>
+                </div>
+
+                <div class="mt-6 p-4 rounded-2xl bg-gradient-to-br from-emerald-950/60 to-slate-950 border border-emerald-500/40 text-center">
+                  <div class="text-[11px] font-medium text-emerald-300 uppercase tracking-wider">Prix de Vente Conseillé au Client Final (COD)</div>
+                  <div class="text-3xl font-black text-white mt-1 tracking-tight">
+                    ${calc.totalSuggestedDzd.toLocaleString()} <span class="text-emerald-400 text-lg">DZD</span>
+                  </div>
+                  <div class="text-[11px] text-slate-400 mt-1">
+                    Prix barré marketing suggéré : <span class="line-through text-slate-500">${Math.round(calc.totalSuggestedDzd * 1.35).toLocaleString()} DA</span>
+                  </div>
+                </div>
+
+                <div class="mt-4 p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400">
+                  <span class="text-brand-400 font-bold">Sécurité COD :</span> 
+                  Ce montant couvre les retours d'expédition (taux moyen d'échec de 12% en Algérie pris en compte dans le coussin de marge).
+                </div>
+              </div>
+
+              <div class="pt-4 border-t border-slate-800">
+                <button 
+                  onclick="switchTab('drafts')"
+                  class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5"
+                >
+                  <span>Consulter le Tableau des Brouillons (${state.drafts.length})</span>
+                  <span>→</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // --- 2.4 READY FOR REVIEW (DRAFTS) TAB ---
+    function renderDraftsTab() {
+      return `
+        <div class="max-w-6xl mx-auto space-y-8">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                Fiches Produits Prêtes pour Révision
+                <span class="text-xs px-2.5 py-1 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-400 font-bold">
+                  ${state.drafts.length} Fiches Disponibles
+                </span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">
+                Revoyez le titre bilingue, validez le tarif en Dinars et synchronisez directement vers votre vitrine YouCan ou Shopify.
+              </p>
+            </div>
+
+            <button 
+              onclick="switchTab('scraper')"
+              class="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2"
+            >
+              <span>+ Scraper un Nouveau Produit</span>
             </button>
           </div>
-          <pre id="output-json-box" class="p-3 bg-slate-950 text-emerald-300 font-mono text-xs overflow-x-auto max-h-[300px] leading-relaxed"></pre>
-        </div>
 
-        <!-- Live Web3 RPC & Gas Logs Terminal -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
-          <div class="flex items-center justify-between px-3 py-2 bg-slate-950 border-b border-slate-800 text-xs">
-            <span class="font-semibold text-white">Live Web3 ethers.js RPC Telemetry</span>
-            <span class="text-slate-500 font-mono text-[11px]">ethers v6 / Polygon Mainnet</span>
+          <div class="space-y-4">
+            ${state.drafts.map(draft => `
+              <div class="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition-all flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+                
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-5 w-full lg:w-3/5">
+                  <img 
+                    src="${draft.image}" 
+                    alt="${draft.titleFr}" 
+                    class="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover shrink-0 border border-slate-800"
+                  />
+                  <div class="space-y-1.5 flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="text-[10px] px-2 py-0.5 rounded-md font-bold uppercase bg-slate-800 text-emerald-400">
+                        ${draft.sourcePlatform}
+                      </span>
+                      <span class="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-slate-800 text-slate-300">
+                        Hub: ${draft.wilayaHub}
+                      </span>
+                      ${draft.status === 'published' ? `
+                        <span class="text-[10px] px-2 py-0.5 rounded-md font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          ✓ En Ligne sur la Boutique
+                        </span>
+                      ` : `
+                        <span class="text-[10px] px-2 py-0.5 rounded-md font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          Prêt pour publication
+                        </span>
+                      `}
+                    </div>
+
+                    <h3 class="text-sm font-bold text-white line-clamp-2">
+                      ${draft.titleFr}
+                    </h3>
+
+                    <p class="text-xs text-slate-300 font-ar text-right leading-relaxed line-clamp-1">
+                      ${draft.titleAr}
+                    </p>
+
+                    <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                      ${draft.specs.slice(0, 3).map(s => `
+                        <span class="text-[10px] px-2 py-0.5 rounded-md bg-slate-950 text-slate-400 border border-slate-800/80">
+                          ${s}
+                        </span>
+                      `).join('')}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row lg:flex-col xl:flex-row items-stretch sm:items-center justify-end gap-5 w-full lg:w-auto pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-800">
+                  
+                  <div class="text-left sm:text-right lg:text-left xl:text-right">
+                    <div class="text-[10px] text-slate-400">Prix de Vente COD (DZD)</div>
+                    <div class="text-xl font-extrabold text-white flex items-center sm:justify-end gap-1">
+                      <span>${draft.finalPriceDzd.toLocaleString()}</span>
+                      <span class="text-emerald-400 text-sm">DA</span>
+                    </div>
+                    <div class="text-[10px] text-slate-500">
+                      Coût: $${draft.originalUsd} (${draft.costDzd} DA) · Marge: +${draft.margin}%
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <button 
+                      onclick="publishDraft('${draft.id}', 'youcan')"
+                      title="Publier sur YouCan"
+                      class="px-3.5 py-2.5 rounded-xl bg-[#00b074] hover:bg-[#029764] text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+                    >
+                      <span>YouCan</span>
+                      <span>↑</span>
+                    </button>
+
+                    <button 
+                      onclick="publishDraft('${draft.id}', 'shopify')"
+                      title="Publier sur Shopify"
+                      class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-[#95bf47] hover:text-white text-xs font-bold transition-all border border-slate-700 flex items-center gap-1.5"
+                    >
+                      <span>Shopify</span>
+                      <span>↑</span>
+                    </button>
+
+                    <button 
+                      onclick="deleteDraft('${draft.id}')"
+                      title="Supprimer la fiche"
+                      class="p-2.5 rounded-xl bg-slate-950 hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 border border-slate-800 transition-colors"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                  </div>
+
+                </div>
+
+              </div>
+            `).join('')}
           </div>
-          <div id="terminal-logs-box" class="p-3 bg-slate-950 font-mono text-xs text-slate-300 overflow-y-auto max-h-[300px] space-y-1"></div>
-        </div>
-      </div>
-    </section>
 
-    <!-- 2. DISCOVERY FEED VIEW -->
-    <section id="view-feed" class="hidden space-y-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-sm font-bold text-white">Live DEX Liquidity Pools</h2>
-          <p class="text-xs text-slate-400">Scouted routes on QuickSwap, SushiSwap, and Uniswap V3 on Polygon Mainnet.</p>
         </div>
-      </div>
-      <div id="feed-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
-    </section>
+      `;
+    }
 
-    <!-- 3. RPC SIMULATOR -->
-    <section id="view-ingest" class="hidden space-y-4">
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-        <div class="flex items-center justify-between">
-          <h2 class="text-sm font-bold text-white">Live ethers.js JSON-RPC Request Tester</h2>
-          <button onclick="executeCustomRpcCall()" class="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold">
-            Send RPC Query
-          </button>
-        </div>
-        <p class="text-xs text-slate-400">
-          Query live on-chain gas or block numbers directly via Polygon Public RPC:
-        </p>
-        <textarea id="ingest-json-textarea" rows="8" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 font-mono text-xs text-cyan-300 outline-none focus:border-cyan-500 leading-relaxed">{
-  "jsonrpc": "2.0",
-  "method": "eth_gasPrice",
-  "params": [],
-  "id": 1
-}</textarea>
-        <div id="rpc-query-result" class="p-3 bg-slate-950 font-mono text-xs text-emerald-300 rounded border border-slate-800 hidden"></div>
-      </div>
-    </section>
+    // --- 2.5 WILAYAS & LOGISTICS MATRIX TAB ---
+    function renderWilayasTab() {
+      return `
+        <div class="max-w-6xl mx-auto space-y-8">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                Grille des 58 Wilayas Algériennes & Tarifs de Livraison
+                <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 font-semibold">Réforme Administrative 2024</span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">
+                Tableau complet intégrant les codes Wilaya (01 à 58), les zones géographiques et les coûts standard de livraison Stop Desk & Domicile pour vos fiches CatalogFlow.
+              </p>
+            </div>
 
-    <!-- 4. USDT ESCROW LEDGER -->
-    <section id="view-ledger" class="hidden space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-sm font-bold text-white">Instant Settlement Transaction Ledger</h2>
-        <button onclick="exportLedgerJson()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium">
-          Export Ledger JSON
-        </button>
-      </div>
-      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-slate-950 text-slate-400 font-mono text-[11px] border-b border-slate-800">
-              <tr>
-                <th class="py-2.5 px-3">Time</th>
-                <th class="py-2.5 px-3">Route ID</th>
-                <th class="py-2.5 px-3">Status</th>
-                <th class="py-2.5 px-3 text-right">Net Profit</th>
-                <th class="py-2.5 px-3">On-Chain TX</th>
-              </tr>
-            </thead>
-            <tbody id="ledger-table-body" class="divide-y border-slate-800/60 font-mono"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- 5. KEYS & WEB3 SAFE -->
-    <section id="view-credentials" class="hidden space-y-4">
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-        <h2 class="text-sm font-bold text-white flex items-center gap-2">
-          <span>Web3 Security Boundary & Payout Destination</span>
-        </h2>
-        <div class="p-3 bg-amber-950/40 border border-amber-800/60 rounded-lg text-xs text-amber-200 leading-relaxed">
-          <strong>Security Principle:</strong> Private keys (<code class="text-amber-300">WALLET_PRIVATE_KEY</code>) must NEVER be hardcoded inside client-side HTML, because client scripts are visible to anyone in DevTools. All flash loan route execution is pre-funded through Aave flash loans with zero capital risk, and proceeds settle directly to your destination wallet.
-        </div>
-        
-        <div class="space-y-3 pt-2 text-xs">
-          <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-1">
-            <div class="font-semibold text-cyan-400">RECIPIENT_WALLET_ADDRESS</div>
-            <div class="text-slate-400 text-[11px]">
-              Direct settlement destination for flash loan profits:
-              <div class="font-mono text-emerald-400 mt-1 font-semibold" id="wallet-display-val">0x992B1cE0E738b55694c9Cda13251a37c95b6cFe1</div>
+            <div class="text-xs text-slate-400 bg-slate-900 border border-slate-800 px-3.5 py-2 rounded-xl flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span>58 Wilayas Synchronisées</span>
             </div>
           </div>
-          <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-1">
-            <div class="font-semibold text-cyan-400">Live ethers.js JsonRpcProvider</div>
-            <div class="text-slate-400 text-[11px]">
-              Primary RPC: <code class="text-slate-200">https://polygon-bor-rpc.publicnode.com</code> | Fallback: <code class="text-slate-200">https://1rpc.io/matic</code> | Node: <code class="text-slate-200">https://polygon-rpc.com</code>
-            </div>
-          </div>
-          <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-1">
-            <div class="font-semibold text-cyan-400">Aave V3 Flash Loan Pool Address (Polygon)</div>
-            <div class="text-slate-400 text-[11px]">
-              Contract: <code class="text-cyan-300">0x794a61358D6845594F94dc1DB02A252b5b4814aD</code> (Fee: 0.05%)
+
+          <div class="rounded-3xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-xl">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-300">
+                <thead class="bg-slate-950/80 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800 font-semibold">
+                  <tr>
+                    <th class="py-3.5 px-4">Code</th>
+                    <th class="py-3.5 px-4">Nom Français</th>
+                    <th class="py-3.5 px-4 text-right">الولاية بالعربية</th>
+                    <th class="py-3.5 px-4">Zone</th>
+                    <th class="py-3.5 px-4 text-right">Stop Desk (DA)</th>
+                    <th class="py-3.5 px-4 text-right">Domicile (DA)</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 font-medium">
+                  ${ALGERIAN_WILAYAS.map(w => `
+                    <tr class="hover:bg-slate-800/30 transition-colors">
+                      <td class="py-3 px-4 font-mono font-bold text-brand-400">${w.code}</td>
+                      <td class="py-3 px-4 font-semibold text-white">${w.name}</td>
+                      <td class="py-3 px-4 text-right font-ar text-slate-200 text-sm">${w.nameAr}</td>
+                      <td class="py-3 px-4">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${
+                          w.zone.includes('Sud') ? 'bg-amber-950 text-amber-300 border border-amber-800/40' :
+                          w.zone.includes('Capitale') ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/40' :
+                          'bg-slate-800 text-slate-300'
+                        }">
+                          ${w.zone}
+                        </span>
+                      </td>
+                      <td class="py-3 px-4 text-right font-mono text-slate-300">${w.deskCost} DA</td>
+                      <td class="py-3 px-4 text-right font-mono font-bold text-emerald-400">${w.homeCost} DA</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- Complete Web3 Live ethers.js RPC & Flash Loan Execution Script -->
-  <script>
-    // -------------------------------------------------------------------------
-    // Live ethers.js RPC Engine & Web3 Public Providers
-    // -------------------------------------------------------------------------
-    const RPC_ENDPOINTS = [
-      'https://polygon-bor-rpc.publicnode.com',
-      'https://1rpc.io/matic',
-      'https://polygon-rpc.com'
-    ];
-    let activeRpcUrl = RPC_ENDPOINTS[0];
-    let ethersProvider = null;
-
-    const RECIPIENT_WALLET = '0x992B1cE0E738b55694c9Cda13251a37c95b6cFe1';
-    const AAVE_V3_POOL_POLYGON = '0x794a61358D6845594F94dc1DB02A252b5b4814aD';
-    const USDT_POLYGON_ADDRESS = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
-
-    // Initialize ethers JsonRpcProvider with fallback support
-    function initEthersProvider() {
-      if (typeof ethers !== 'undefined' && ethers.JsonRpcProvider) {
-        try {
-          ethersProvider = new ethers.JsonRpcProvider(activeRpcUrl);
-        } catch {
-          ethersProvider = null;
-        }
-      }
+      `;
     }
 
-    // Live Routes Dataset
-    const ROUTES_QUEUE = [
-      {
-        task_id: "ROUTE-USDC-USDT-AAVE",
-        source: "POLYGON_MAINNET",
-        title: "Aave V3 Flash Borrow (100,000 USDT) QuickSwap -> SushiSwap",
-        category: "CODE_AUDIT",
-        bounty_usdt: 84.60,
-        borrow_amount: 100000,
-        aave_fee: 50.00,
-        gross_spread_percent: 0.14,
-        verification: {
-          gateway_type: "SMART_CONTRACT_ESCROW",
-          algorithmic: true,
-          prefunded_escrow: true,
-          escrow_tx: "0x3f9a7c81d24e0b51909a8274f81023bc6518a209",
-          requires_human_approval: false,
-          requires_email_confirmation: false,
-          pending_period_hours: 0
-        },
-        specification: "Borrow 100,000 USDT on Aave V3. Swap on QuickSwap for USDC, swap back on SushiSwap. Repay 100,050 USDT. Retain net profit."
-      },
-      {
-        task_id: "ROUTE-INVERTED-SPREAD",
-        source: "POLYGON_MAINNET",
-        title: "Inverted Spread Route (-$12.40 Net Loss Trap)",
-        category: "CODE_AUDIT",
-        bounty_usdt: 0.0,
-        borrow_amount: 50000,
-        aave_fee: 25.00,
-        gross_spread_percent: -0.02,
-        verification: {
-          gateway_type: "MANUAL_ADMIN_REVIEW",
-          algorithmic: false,
-          prefunded_escrow: false,
-          requires_human_approval: true,
-          requires_email_confirmation: false,
-          pending_period_hours: 24
-        },
-        specification: "Negative arbitrage spread detected. Fails gas profit verification."
-      },
-      {
-        task_id: "ROUTE-WETH-USDT-QUICK",
-        source: "POLYGON_MAINNET",
-        title: "WETH/USDT Micro-Arbitrage (25,000 USDT Flash Loan)",
-        category: "MICRO_BOUNTY",
-        bounty_usdt: 18.20,
-        borrow_amount: 25000,
-        aave_fee: 12.50,
-        gross_spread_percent: 0.13,
-        verification: {
-          gateway_type: "PROGRAMMATIC_JSON_API",
-          algorithmic: true,
-          prefunded_escrow: true,
-          escrow_tx: "0x81b0451a92df4c29182379b201f98aa1249b0151",
-          requires_human_approval: false,
-          requires_email_confirmation: false,
-          pending_period_hours: 0
-        },
-        specification: "Micro-arbitrage executing against QuickSwap V3 WETH/USDT liquidity pool with atomic settlement."
-      },
-      {
-        task_id: "ROUTE-SLIPPAGE-EXCEEDED",
-        source: "POLYGON_MAINNET",
-        title: "High Slippage Route (0.8% Slippage Trap)",
-        category: "DATA_ENRICHMENT",
-        bounty_usdt: 0.0,
-        borrow_amount: 200000,
-        aave_fee: 100.00,
-        gross_spread_percent: 0.05,
-        verification: {
-          gateway_type: "EMAIL_VERIFICATION",
-          algorithmic: false,
-          prefunded_escrow: true,
-          requires_human_approval: true,
-          requires_email_confirmation: true,
-          pending_period_hours: 48
-        },
-        specification: "Slippage exceeds 0.5% maximum tolerance. Automatic abort triggered."
-      },
-      {
-        task_id: "ROUTE-UNISWAP-AAVE-MATIC",
-        source: "POLYGON_MAINNET",
-        title: "Uniswap V3 / QuickSwap MATIC-USDT Route",
-        category: "CODE_AUDIT",
-        bounty_usdt: 72.80,
-        borrow_amount: 80000,
-        aave_fee: 40.00,
-        gross_spread_percent: 0.15,
-        verification: {
-          gateway_type: "SMART_CONTRACT_ESCROW",
-          algorithmic: true,
-          prefunded_escrow: true,
-          escrow_tx: "0x9183cc902ba8e202391034f87a216c59b208fa11",
-          requires_human_approval: false,
-          requires_email_confirmation: false,
-          pending_period_hours: 0
-        },
-        specification: "Aave V3 flash loan swapped across Uniswap V3 concentrated liquidity pool and QuickSwap."
-      },
-      {
-        task_id: "ROUTE-INSUFFICIENT-DEPTH",
-        source: "POLYGON_MAINNET",
-        title: "Thin Pool Liquidity Trap",
-        category: "MICRO_BOUNTY",
-        bounty_usdt: 0.0,
-        borrow_amount: 500000,
-        aave_fee: 250.00,
-        gross_spread_percent: 0.02,
-        verification: {
-          gateway_type: "PROGRAMMATIC_JSON_API",
-          algorithmic: false,
-          prefunded_escrow: false,
-          requires_human_approval: false,
-          requires_email_confirmation: false,
-          pending_period_hours: 72
-        },
-        specification: "Pool reserves too shallow for 500k borrow without causing 4% price impact."
-      }
-    ];
-
-    // State Variables
-    let dailyEarnings = 0.0;
-    const DAILY_TARGET_MIN = 50.0;
-    const DAILY_TARGET_MAX = 150.0;
-    let resolvedCount = 0;
-    let abortedCount = 0;
-    let currentTaskIndex = 0;
-    let isDaemonRunning = false;
-    let daemonTimer = null;
-    let ledgerHistory = [];
-    let currentRecord = null;
-    let liveGasPriceGwei = 32.4;
-    let liveBlockNumber = 95890481;
-    let liveBlockTimestamp = Date.now();
-
-    // -------------------------------------------------------------------------
-    // Real ethers.js JSON-RPC Fetcher
-    // -------------------------------------------------------------------------
-    async function fetchLiveRpcData() {
-      let fetched = false;
-
-      // 1. Try ethers.js Provider first
-      if (typeof ethers !== 'undefined' && ethersProvider) {
-        try {
-          const blockNum = await ethersProvider.getBlockNumber();
-          if (blockNum) {
-            liveBlockNumber = blockNum;
-            document.getElementById('rpc-block-number').innerText = `#${liveBlockNumber.toLocaleString()}`;
-            fetched = true;
-          }
-
-          const feeData = await ethersProvider.getFeeData();
-          if (feeData && feeData.gasPrice) {
-            liveGasPriceGwei = Number(ethers.formatUnits(feeData.gasPrice, 'gwei')).toFixed(1);
-            document.getElementById('rpc-gas-price').innerText = `${liveGasPriceGwei} Gwei`;
-          }
-        } catch {
-          // Fallback to direct HTTP fetch
-        }
-      }
-
-      // 2. Direct HTTP JSON-RPC calls across endpoints
-      if (!fetched) {
-        for (const endpoint of RPC_ENDPOINTS) {
-          try {
-            const blockRes = await fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 })
-            });
-            const blockData = await blockRes.json();
-            if (blockData.result) {
-              liveBlockNumber = parseInt(blockData.result, 16);
-              document.getElementById('rpc-block-number').innerText = `#${liveBlockNumber.toLocaleString()}`;
-              fetched = true;
-            }
-
-            const gasRes = await fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_gasPrice', params: [], id: 2 })
-            });
-            const gasData = await gasRes.json();
-            if (gasData.result) {
-              const wei = parseInt(gasData.result, 16);
-              liveGasPriceGwei = Math.max(25, Number((wei / 1e9).toFixed(1)));
-              document.getElementById('rpc-gas-price').innerText = `${liveGasPriceGwei} Gwei`;
-            }
-            if (fetched) {
-              activeRpcUrl = endpoint;
-              const nodeLabel = endpoint.replace('https://', '').split('/')[0];
-              document.getElementById('rpc-active-node').innerText = nodeLabel;
-              document.getElementById('scout-rpc-label').innerText = nodeLabel;
-              break;
-            }
-          } catch {
-            // Next endpoint
-          }
-        }
-      }
-
-      // 3. Fallback increment for network continuity
-      if (!fetched) {
-        liveBlockNumber += 1;
-        document.getElementById('rpc-block-number').innerText = `#${liveBlockNumber.toLocaleString()}`;
-        document.getElementById('rpc-gas-price').innerText = `${liveGasPriceGwei} Gwei`;
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // 4-Phase Pipeline: Web3 Flash Loan & Arbitrage Routing Engine
-    // -------------------------------------------------------------------------
-
-    // Phase 1: Scout Mempool
-    function scoutRoute(route) {
-      return {
-        task_id: route.task_id,
-        source: route.source,
-        borrow: route.borrow_amount,
-        spread: route.gross_spread_percent
-      };
-    }
-
-    // Phase 2: STRICT ZERO-HUMAN & PROFITABILITY FILTER
-    function evaluateZeroHumanFilter(route) {
-      const v = route.verification;
-      const flags = [];
-
-      // Check 1: Manual human review or non-instant confirmation
-      if (v.requires_human_approval || v.gateway_type === 'MANUAL_ADMIN_REVIEW') {
-        flags.push('PROHIBITED: HUMAN_ADMIN_REVIEW_REQUIRED (Manual text review or admin approval detected)');
-      }
-      if (v.requires_email_confirmation || v.gateway_type === 'EMAIL_VERIFICATION') {
-        flags.push('PROHIBITED: EMAIL_OR_PHONE_CONFIRMATION_REQUIRED (Non-programmatic verification)');
-      }
-      if (v.pending_period_hours && v.pending_period_hours > 0) {
-        flags.push(`PROHIBITED: PENDING_HOLD_PERIOD (${v.pending_period_hours}h hold queue detected; only instant flash settlement allowed)`);
-      }
-      if (!v.prefunded_escrow) {
-        flags.push('PROHIBITED: FLASH_LOAN_UNFUNDED (Must be algorithmically pre-funded by Aave V3 Pool)');
-      }
-
-      // Check 2: Mathematical Profitability Invariant
-      const grossProfit = (route.borrow_amount * (route.gross_spread_percent / 100));
-      const estGasUsdt = (320000 * (parseFloat(liveGasPriceGwei) * 1e9) / 1e18) * 0.70;
-      const netProfit = grossProfit - route.aave_fee - estGasUsdt;
-
-      if (netProfit <= 0) {
-        flags.push(`PROHIBITED: UNPROFITABLE_ROUTE (Gross: +$${grossProfit.toFixed(2)} - Aave Fee: $${route.aave_fee} - Gas: $${estGasUsdt.toFixed(2)} = Net Loss: $${netProfit.toFixed(2)})`);
-      }
-
-      return {
-        passed: flags.length === 0,
-        flags: flags,
-        reason: flags[0],
-        netProfit: Math.max(0, netProfit)
-      };
-    }
-
-    // Phase 3: Execute Flash Loan Calldata
-    function executeFlashLoan(route, filterResult) {
-      const startTime = performance.now();
-      const logs = [];
-
-      logs.push(`[ETHERS_RPC] Connected to ${activeRpcUrl} via JsonRpcProvider`);
-      logs.push(`[MEMPOOL] Scouted Block #${liveBlockNumber} | Gas: ${liveGasPriceGwei} Gwei`);
-      logs.push(`[AAVE_V3] Target Pool Contract: ${AAVE_V3_POOL_POLYGON}`);
-      logs.push(`[FLASH_BORROW] Initializing Aave V3 FlashLoanSimple(receiver, ${route.borrow_amount} USDT)`);
-      logs.push(`[FEE_CHECK] Aave V3 protocol premium: 0.05% ($${route.aave_fee.toFixed(2)} USDT)`);
-      logs.push(`[SWAP_1] QuickSwap: ${route.borrow_amount} USDT -> USDC pool`);
-      logs.push(`[SWAP_2] SushiSwap: USDC -> USDT return pool`);
-      logs.push(`[REPAY] Repaid Aave V3 in atomic block #${liveBlockNumber}`);
-      logs.push(`[PROFIT] Net profit surplus: +$${route.bounty_usdt.toFixed(2)} USDT`);
-
-      const runtimeMs = (performance.now() - startTime).toFixed(2);
-      logs.push(`[ATOMIC_SUCCESS] Calldata verified & executed in ${runtimeMs}ms`);
-
-      const calldataPayload = `0x23b872dd000000000000000000000000${RECIPIENT_WALLET.substring(2)}`;
-
-      return {
-        logs: logs,
-        calldata: calldataPayload,
-        runtimeMs: runtimeMs,
-        payout: route.bounty_usdt
-      };
-    }
-
-    // Phase 4: Deliver & Payout Settle
-    function deliverSettlement(route, filterResult, executionResult) {
-      if (!filterResult.passed) {
-        return {
-          task_id: route.task_id,
-          status: 'ABORTED',
-          payout_expected: 0.0,
-          payload_delivered: JSON.stringify({
-            error: 'PROHIBITED_OR_UNPROFITABLE_ROUTE',
-            reason: filterResult.reason
-          }),
-          execution_log: `ABORTED: Zero-Human rule violation or zero-margin spread detected. ${filterResult.reason}`
-        };
-      }
-
-      return {
-        task_id: route.task_id,
-        status: 'SUCCESS',
-        payout_expected: Number(executionResult.payout.toFixed(2)),
-        payload_delivered: executionResult.calldata,
-        execution_log: `SUCCESS: Atomic flash loan executed on Block #${liveBlockNumber} in ${executionResult.runtimeMs}ms. Net profit +$${executionResult.payout.toFixed(2)} USDT automatically settled to ${RECIPIENT_WALLET}.`
-      };
-    }
-
-    // Pipeline Runner
-    function processRoute(route) {
-      scoutRoute(route);
-      const filterResult = evaluateZeroHumanFilter(route);
-
-      if (!filterResult.passed) {
-        const deliveryOutput = deliverSettlement(route, filterResult, null);
-        return {
-          timestamp: new Date().toISOString(),
-          route: route,
-          filter: filterResult,
-          execution: null,
-          delivery: deliveryOutput,
-          txHash: null
-        };
-      }
-
-      const executionResult = executeFlashLoan(route, filterResult);
-      const deliveryOutput = deliverSettlement(route, filterResult, executionResult);
-      const randomHex = Array.from({length: 40}, () => Math.floor(Math.random() * 16).toString(16)).join('');
-      const txHash = '0x' + randomHex;
-
-      return {
-        timestamp: new Date().toISOString(),
-        route: route,
-        filter: filterResult,
-        execution: executionResult,
-        delivery: deliveryOutput,
-        txHash: txHash
-      };
-    }
-
-    // -------------------------------------------------------------------------
-    // UI Updating & Renderers
-    // -------------------------------------------------------------------------
-
-    function updateUIWithRecord(record) {
-      currentRecord = record;
-      const r = record.route;
-      const isSuccess = record.delivery.status === 'SUCCESS';
-
-      // Header info
-      document.getElementById('current-task-id').innerText = r.task_id;
-      document.getElementById('current-task-source').innerText = r.source;
-      document.getElementById('current-task-bounty').innerText = isSuccess ? `+$${record.delivery.payout_expected.toFixed(2)} USDT Net` : '$0.00 Net (Aborted)';
-      document.getElementById('current-task-title').innerText = r.title;
-      document.getElementById('current-task-spec').innerText = r.specification;
-
-      // Phase 1 Scout
-      document.getElementById('scout-bounty').innerText = `${r.gross_spread_percent > 0 ? '+' : ''}${r.gross_spread_percent}% Spread`;
-
-      // Phase 2 Filter
-      const phase2Card = document.getElementById('phase2-card');
-      const phase2Badge = document.getElementById('phase2-badge');
-      if (record.filter.passed) {
-        phase2Card.className = 'bg-slate-900 border border-emerald-900/60 bg-emerald-950/10 rounded-xl p-3.5 space-y-2';
-        phase2Badge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800';
-        phase2Badge.innerText = 'PASSED';
-      } else {
-        phase2Card.className = 'bg-slate-900 border border-rose-900/60 bg-rose-950/10 rounded-xl p-3.5 space-y-2';
-        phase2Badge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800';
-        phase2Badge.innerText = 'PROHIBITED';
-      }
-      document.getElementById('filter-prefunded').innerText = r.verification.prefunded_escrow ? '✓ LOCKED' : '✗ UNLOCKED';
-      document.getElementById('filter-prefunded').className = r.verification.prefunded_escrow ? 'font-mono text-emerald-400' : 'font-mono text-rose-400';
-      document.getElementById('filter-algorithmic').innerText = record.filter.passed ? '✓ PASS' : '✗ NEGATIVE';
-      document.getElementById('filter-algorithmic').className = record.filter.passed ? 'font-mono text-emerald-400' : 'font-mono text-rose-400';
-
-      // Phase 3 & 4
-      if (isSuccess) {
-        document.getElementById('phase3-badge').innerText = 'ATOMIC';
-        document.getElementById('phase3-badge').className = 'text-[10px] font-mono text-emerald-400';
-        document.getElementById('exec-assertions').innerText = `+$${record.delivery.payout_expected.toFixed(2)} Net`;
-        document.getElementById('exec-runtime').innerText = `~${(parseFloat(liveGasPriceGwei) * 0.15).toFixed(2)} USDT`;
-
-        document.getElementById('phase4-badge').innerText = 'SETTLED';
-        document.getElementById('phase4-badge').className = 'text-[10px] font-mono text-emerald-400';
-        document.getElementById('deliver-status').innerText = 'SUCCESS';
-        document.getElementById('deliver-status').className = 'font-mono text-emerald-400 font-bold';
-        document.getElementById('deliver-payout').innerText = `+$${record.delivery.payout_expected.toFixed(2)} USDT`;
-        document.getElementById('deliver-tx').innerText = record.txHash.substring(0, 10) + '...';
-      } else {
-        document.getElementById('phase3-badge').innerText = 'REVERTED';
-        document.getElementById('phase3-badge').className = 'text-[10px] font-mono text-slate-500';
-        document.getElementById('exec-assertions').innerText = '$0.00 (Zero Capital Risk)';
-        document.getElementById('exec-runtime').innerText = '0.0ms';
-
-        document.getElementById('phase4-badge').innerText = 'ABORTED';
-        document.getElementById('phase4-badge').className = 'text-[10px] font-mono text-rose-400';
-        document.getElementById('deliver-status').innerText = 'ABORTED';
-        document.getElementById('deliver-status').className = 'font-mono text-rose-400 font-bold';
-        document.getElementById('deliver-payout').innerText = '$0.00';
-        document.getElementById('deliver-tx').innerText = 'None';
-      }
-
-      // Output JSON Viewer
-      document.getElementById('output-json-box').innerText = JSON.stringify(record.delivery, null, 2);
-
-      // Terminal Logs Viewer
-      const terminalBox = document.getElementById('terminal-logs-box');
-      terminalBox.innerHTML = '';
-      if (isSuccess && record.execution) {
-        record.execution.logs.forEach(log => {
-          const div = document.createElement('div');
-          div.className = log.includes('[ATOMIC_SUCCESS]') || log.includes('[PROFIT]') ? 'text-emerald-400 font-semibold' : 'text-slate-300';
-          div.innerText = log;
-          terminalBox.appendChild(div);
-        });
-      } else {
-        const div = document.createElement('div');
-        div.className = 'text-rose-400 font-semibold';
-        div.innerText = `[ZERO-HUMAN FILTER] REJECTED ROUTE: ${record.route.task_id}`;
-        terminalBox.appendChild(div);
-        const div2 = document.createElement('div');
-        div2.className = 'text-rose-300 text-xs';
-        div2.innerText = `Reason: ${record.filter.reason}`;
-        terminalBox.appendChild(div2);
-        const div3 = document.createElement('div');
-        div3.className = 'text-slate-500 text-[11px] pt-1';
-        div3.innerText = 'Rule 1 Invariant: No unprofitable trade, manual hold, or uncollateralized route is permitted into on-chain broadcast.';
-        terminalBox.appendChild(div3);
-      }
-    }
-
-    function updateHUD() {
-      document.getElementById('hud-current-earnings').innerText = `$${dailyEarnings.toFixed(2)}`;
-      const progress = Math.min(100, Math.round((dailyEarnings / DAILY_TARGET_MAX) * 100));
-      document.getElementById('hud-progress-bar').style.width = `${progress}%`;
-      document.getElementById('hud-resolved-count').innerText = resolvedCount;
-      document.getElementById('hud-aborted-count').innerText = abortedCount;
-    }
-
-    function updateLedgerTable() {
-      const tbody = document.getElementById('ledger-table-body');
-      tbody.innerHTML = '';
-      ledgerHistory.forEach(r => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-slate-800/40 transition-colors';
-        const isSuccess = r.delivery.status === 'SUCCESS';
-        tr.innerHTML = `
-          <td class="py-2.5 px-3 text-slate-400 text-[11px] whitespace-nowrap">${new Date(r.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</td>
-          <td class="py-2.5 px-3 text-cyan-400 font-semibold">${r.route.task_id}</td>
-          <td class="py-2.5 px-3 ${isSuccess ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}">${r.delivery.status}</td>
-          <td class="py-2.5 px-3 text-right tabular-nums ${isSuccess ? 'text-emerald-400 font-semibold' : 'text-slate-500'}">${isSuccess ? '+$' + r.delivery.payout_expected.toFixed(2) : '$0.00'}</td>
-          <td class="py-2.5 px-3 text-[11px] text-slate-400">${r.txHash ? r.txHash.substring(0, 10) + '...' : '—'}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function renderFeedList() {
-      const container = document.getElementById('feed-list');
-      container.innerHTML = '';
-      ROUTES_QUEUE.forEach((route, index) => {
-        const isProfitable = route.bounty_usdt > 0 && !route.verification.requires_human_approval;
-        const card = document.createElement('div');
-        card.className = 'bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-2';
-        card.innerHTML = `
-          <div class="flex items-center justify-between text-xs">
-            <span class="font-mono text-cyan-400 font-semibold">${route.task_id}</span>
-            <span class="font-mono ${isProfitable ? 'text-emerald-400' : 'text-slate-500'} font-bold">
-              ${isProfitable ? '+$' + route.bounty_usdt.toFixed(2) + ' Net' : 'Unprofitable'}
-            </span>
-          </div>
-          <h3 class="text-xs font-bold text-white">${route.title}</h3>
-          <p class="text-[11px] text-slate-400 line-clamp-2">${route.specification}</p>
-          <div class="pt-2 flex items-center justify-between text-[11px]">
-            <span class="${isProfitable ? 'text-emerald-400' : 'text-rose-400'} font-mono">${isProfitable ? '✓ Pre-funded Aave V3' : '✗ Trap / Loss'}</span>
-            <button onclick="selectAndExecuteRoute(${index})" class="px-2.5 py-1 ${isProfitable ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-rose-900/60 hover:bg-rose-800 text-rose-200'} rounded font-medium text-[11px]">
-              ${isProfitable ? 'Execute Flash Loan' : 'Test Filter Abort'}
-            </button>
-          </div>
-        `;
-        container.appendChild(card);
-      });
-    }
-
-    // -------------------------------------------------------------------------
-    // User Interactions & Actions
-    // -------------------------------------------------------------------------
-
-    function onSelectTaskChange(index) {
-      currentTaskIndex = parseInt(index, 10);
-      runPipelineOnCurrentTask();
-    }
-
-    function selectAndExecuteRoute(index) {
-      currentTaskIndex = index;
-      document.getElementById('select-task').value = String(index);
-      switchTab('pipeline');
-      runPipelineOnCurrentTask();
-    }
-
-    async function runPipelineOnCurrentTask() {
-      await fetchLiveRpcData();
-      const route = ROUTES_QUEUE[currentTaskIndex];
-      const record = processRoute(route);
-      ledgerHistory.unshift(record);
-      if (record.delivery.status === 'SUCCESS') {
-        dailyEarnings += record.delivery.payout_expected;
-        resolvedCount++;
-      } else {
-        abortedCount++;
-      }
-      updateUIWithRecord(record);
-      updateHUD();
-      updateLedgerTable();
-    }
-
-    function toggleAutonomousLoop() {
-      isDaemonRunning = !isDaemonRunning;
-      const btn = document.getElementById('btn-toggle-daemon');
-      const label = document.getElementById('daemon-btn-label');
-      const status = document.getElementById('hud-daemon-status');
-
-      if (isDaemonRunning) {
-        btn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 whitespace-nowrap';
-        label.innerText = 'Pause Daemon';
-        status.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span><span class="text-emerald-400 font-bold">RUNNING</span>';
-
-        // Connect immediately to RPC on start
-        fetchLiveRpcData();
-
-        // Continuous async loop listening to live blockchain state
-        daemonTimer = setInterval(async () => {
-          if (dailyEarnings >= DAILY_TARGET_MAX) {
-            toggleAutonomousLoop();
-            return;
-          }
-          currentTaskIndex = (currentTaskIndex + 1) % ROUTES_QUEUE.length;
-          document.getElementById('select-task').value = String(currentTaskIndex);
-          await runPipelineOnCurrentTask();
-        }, 4000);
-      } else {
-        btn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm bg-cyan-600 hover:bg-cyan-500 text-white whitespace-nowrap';
-        label.innerText = 'Start Daemon';
-        status.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span><span class="text-slate-400">STANDBY</span>';
-        if (daemonTimer) clearInterval(daemonTimer);
-      }
-    }
-
-    function switchTab(tab) {
-      ['pipeline', 'feed', 'ingest', 'ledger', 'credentials'].forEach(t => {
-        const view = document.getElementById(`view-${t}`);
-        const btn = document.getElementById(`tab-${t}`);
-        if (t === tab) {
-          view.classList.remove('hidden');
-          btn.className = 'tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap bg-slate-800 text-white';
-        } else {
-          view.classList.add('hidden');
-          btn.className = 'tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap text-slate-400 hover:text-white';
-        }
-      });
-    }
-
-    function copyCurrentOutputJson() {
-      if (!currentRecord) return;
-      navigator.clipboard.writeText(JSON.stringify(currentRecord.delivery, null, 2));
-      const lbl = document.getElementById('copy-json-label');
-      lbl.innerText = '✓ Copied!';
-      setTimeout(() => lbl.innerText = 'Copy JSON', 2000);
-    }
-
-    async function executeCustomRpcCall() {
-      const textarea = document.getElementById('ingest-json-textarea');
-      const resultBox = document.getElementById('rpc-query-result');
-      try {
-        const body = JSON.parse(textarea.value);
-        resultBox.classList.remove('hidden');
-        resultBox.innerText = 'Querying live ethers.js RPC...';
-
-        const res = await fetch(activeRpcUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-        const data = await res.json();
-        resultBox.innerText = JSON.stringify(data, null, 2);
-      } catch (e) {
-        resultBox.classList.remove('hidden');
-        resultBox.innerText = 'RPC Error: ' + e.message;
-      }
-    }
-
-    function exportLedgerJson() {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(ledgerHistory, null, 2));
-      const a = document.createElement('a');
-      a.href = dataStr;
-      a.download = `flash_loan_ledger_${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
-
-    // Initialize application on load
-    window.addEventListener('DOMContentLoaded', async () => {
-      initEthersProvider();
-      renderFeedList();
-      await fetchLiveRpcData();
-      runPipelineOnCurrentTask();
-      // Periodically sync live network blocks
-      setInterval(fetchLiveRpcData, 8000);
+    // ==========================================
+    // INITIAL BOOTSTRAP
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', () => {
+      renderApp();
     });
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      renderApp();
+    }
   </script>
 </body>
 </html>
