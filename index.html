@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CatalogFlow 🇩🇿 | Algerian E-Commerce Scraper & Storefront Automation</title>
-  <meta name="description" content="Plateforme d'automatisation e-commerce pour le marché algérien. Scraper IA Gemini, intégration Supabase, Shopify & YouCan, export CSV bulk et tarification COD 58 Wilayas." />
+  <meta name="description" content="Plateforme d'automatisation e-commerce pour le marché algérien. Scraper IA Gemini, intégration Supabase, Shopify & YouCan, gestion des packs et export CSV bulk 58 Wilayas." />
   <meta property="og:title" content="CatalogFlow 🇩🇿 | Algerian E-Commerce Automation" />
-  <meta property="og:description" content="Scraper IA Gemini, synchronisation Supabase, export YouCan/Shopify CSV et logistique 58 Wilayas." />
+  <meta property="og:description" content="Scraper IA Gemini, synchronisation Supabase, gestion des packs bulk YouCan/Shopify et logistique 58 Wilayas." />
   <meta property="og:type" content="website" />
 
   <!-- Tailwind CSS CDN -->
@@ -99,6 +99,7 @@
     // Storage Keys
     const DEFAULT_CONFIG_STORAGE_KEY = 'catalogflow_config_v1';
     const SAVED_ITEMS_STORAGE_KEY = 'catalogflow_items_v1';
+    const SAVED_PACK_STORAGE_KEY = 'catalogflow_batch_pack_v1';
 
     // Active Supabase Client Instance
     let supabaseClient = null;
@@ -168,22 +169,51 @@
     ];
 
     // ==========================================
-    // APPLICATION STATE
+    // APPLICATION STATE (IN-MEMORY & LOCAL)
     // ==========================================
     const state = {
-      isActivated: true,
+      isActivated: true, // Direct bypass into production workspace
       showSettingsModal: false,
       config: {
         supabaseUrl: SUPABASE_URL,
         supabaseAnonKey: SUPABASE_ANON_KEY,
         geminiApiKey: GEMINI_API_KEY
       },
-      currentTab: 'scraper',
-      activeStoreTab: 'youcan',
+      currentTab: 'scraper', // 'scraper' | 'connect' | 'drafts' | 'packs' | 'wilayas' | 'dblogs'
+      activeStoreTab: 'youcan', // 'youcan' | 'shopify'
       isScraping: false,
       scrapeLog: '',
       dbLogs: [],
 
+      // GLOBAL ACCUMULATED BATCH PACK ARRAY (IN MEMORY & PERSISTED)
+      batchPack: [
+        {
+          id: 'pack_item_1',
+          title: 'مكنسة لاسلكية محمولة فائقة القوة للسيارة والمنزل - Aspirateur Sans Fil 120W',
+          description: '<p><strong>مكنسة لاسلكية محمولة فائقة القوة</strong></p><p>مكنسة عصرية خفيفة الوزن بقوة شفط جبارة 120W، مثالية لتنظيف فرش السيارة والزوايا الضيقة بالمنزل.</p><hr/><p>Aspirateur portable rechargeable sans fil, filtration HEPA lavable.</p><p><em>🚚 التوصيل متوفر لـ 58 ولاية - الدفع عند الاستلام</em></p>',
+          price: 5500,
+          comparePrice: 7200,
+          images: 'https://images.unsplash.com/photo-1558317374-067fb5f30001?auto=format&fit=crop&w=400&q=80',
+          status: 'active',
+          sourceUrl: 'https://aliexpress.com/item/handheld-vacuum-cleaner',
+          wilayaHub: '16 - Alger',
+          addedAt: '10:14:22'
+        },
+        {
+          id: 'pack_item_2',
+          title: 'مشط حراري لتمليس الشعر بدرجات حرارة قابلة للتعديل - Brosse Lissante Chauffante',
+          description: '<p><strong>مشط حراري لتمليس الشعر</strong></p><p>احصلي على تسريحة صالونات في دقائق معدودة مع المشط الحراري السيراميكي الذكي. يحمي أطراف الشعر ويمنحك لمعاناً يدوم طوال اليوم.</p><hr/><p>Brosse ionique anti-frisottis avec affichage LCD.</p><p><em>🚚 الدفع عند الاستلام بعد المعاينة لجميع الولايات</em></p>',
+          price: 4200,
+          comparePrice: 5900,
+          images: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=400&q=80',
+          status: 'active',
+          sourceUrl: 'https://cjdropshipping.com/product/hair-straightener-brush',
+          wilayaHub: '31 - Oran',
+          addedAt: '10:28:45'
+        }
+      ],
+
+      // Active scraped preview draft (dynamically populated by AI / Form)
       activeDraft: {
         titleFr: 'Aspirateur Sans Fil Multifonction Haute Puissance 120W',
         titleAr: 'مكنسة لاسلكية محمولة فائقة القوة للسيارة والمنزل مع شحن سريع USB',
@@ -192,6 +222,7 @@
         image: 'https://images.unsplash.com/photo-1558317374-067fb5f30001?auto=format&fit=crop&w=400&q=80'
       },
 
+      // Storefront connections
       connectedStores: [
         {
           id: 'store_yc_1',
@@ -211,17 +242,19 @@
         }
       ],
 
+      // Scraper Configuration
       scraper: {
         sourceUrl: 'https://www.aliexpress.com/item/1005007429103982.html',
         usdPrice: 16.50,
-        exchangeRate: 236.5,
-        profitMargin: 45,
-        targetWilaya: '16',
-        deliveryType: 'homeCost',
-        packagingFee: 150,
+        exchangeRate: 236.5, // Square Port-Saïd Parallel Market Rate (DZD/USD)
+        profitMargin: 45, // %
+        targetWilaya: '16', // Alger
+        deliveryType: 'homeCost', // 'homeCost' | 'deskCost'
+        packagingFee: 150, // DZD
         targetCategory: 'Maison & Électronique'
       },
 
+      // Catalog items (ready for review & COD sync)
       items: [
         {
           id: 'item_1',
@@ -295,6 +328,14 @@
             }
           }
         }
+
+        const storedPack = localStorage.getItem(SAVED_PACK_STORAGE_KEY);
+        if (storedPack) {
+          const parsedPack = JSON.parse(storedPack);
+          if (Array.isArray(parsedPack) && parsedPack.length > 0) {
+            state.batchPack = parsedPack;
+          }
+        }
       } catch (err) {
         console.warn('Storage read error', err);
       }
@@ -321,6 +362,7 @@
       try {
         localStorage.setItem(DEFAULT_CONFIG_STORAGE_KEY, JSON.stringify(state.config));
         localStorage.setItem(SAVED_ITEMS_STORAGE_KEY, JSON.stringify(state.items));
+        localStorage.setItem(SAVED_PACK_STORAGE_KEY, JSON.stringify(state.batchPack));
       } catch (e) {
         console.error('Failed to write to localStorage', e);
       }
@@ -381,6 +423,7 @@
       const baseCostDzd = Math.round(usdPrice * exchangeRate);
       const grossMarginDzd = Math.round(baseCostDzd * (marginPct / 100));
       const subtotal = baseCostDzd + grossMarginDzd + deliveryCost + packagingFee;
+      // Round to Algerian market convention ending in 00 or 50 DZD
       const finalPrice = Math.ceil(subtotal / 50) * 50;
       const crossedPrice = Math.ceil((finalPrice * 1.32) / 100) * 100;
 
@@ -416,7 +459,7 @@
       URL.revokeObjectURL(url);
     }
 
-    // 1. Export CSV YouCan Store
+    // 1. Export CSV YouCan Store (Single item or Entire Pack)
     function exportYouCanCsv(exportAll = false) {
       const form = state.scraper;
       const calc = calculatePricingDzd(
@@ -469,7 +512,7 @@
       showToast(`Export YouCan téléchargé : ${filename}`, 'success');
     }
 
-    // 2. Export CSV Shopify Store
+    // 2. Export CSV Shopify Store (Single item or Entire Pack)
     function exportShopifyCsv(exportAll = false) {
       const form = state.scraper;
       const calc = calculatePricingDzd(
@@ -518,6 +561,103 @@
 
       logDatabaseEvent('Export Shopify CSV', `Fichier CSV généré (${rows.length} produit(s)) au format Shopify standard.`);
       showToast(`Export Shopify téléchargé : ${filename}`, 'success');
+    }
+
+    // =========================================================================
+    // BATCH PACK ENGINE: EXPORT ENTIRE CONSOLIDATED CSV PACK (YOUCAN & SHOPIFY)
+    // =========================================================================
+    function downloadBatchPackYouCanCsv() {
+      if (state.batchPack.length === 0) {
+        showToast('Votre Pack est actuellement vide. Lancez un scrape pour ajouter des produits.', 'warning');
+        return;
+      }
+
+      // Official YouCan format columns
+      const headers = ["Title", "Description", "Price", "Compare At Price", "Images", "Status"];
+      const rows = state.batchPack.map(item => {
+        return [
+          sanitizeCsvCell(item.title),
+          sanitizeCsvCell(item.description),
+          sanitizeCsvCell(item.price),
+          sanitizeCsvCell(item.comparePrice),
+          sanitizeCsvCell(item.images),
+          sanitizeCsvCell(item.status || "active")
+        ];
+      });
+
+      const csvContent = headers.map(h => `"${h}"`).join(",") + "\n" + rows.map(r => r.join(",")).join("\n");
+      const filename = `pack_youcan_complet_${state.batchPack.length}_produits_dz_${Date.now()}.csv`;
+      triggerFileDownload(csvContent, filename);
+
+      logDatabaseEvent('Pack YouCan Exporté', `Pack complet de ${state.batchPack.length} produits exporté vers YouCan.`);
+      showToast(`Pack YouCan Complet téléchargé (${state.batchPack.length} produits) ! 🚀`, 'success');
+    }
+
+    function downloadBatchPackShopifyCsv() {
+      if (state.batchPack.length === 0) {
+        showToast('Votre Pack est actuellement vide. Lancez un scrape pour ajouter des produits.', 'warning');
+        return;
+      }
+
+      // Official Shopify format columns
+      const headers = ["Title", "Body (HTML)", "Variant Price", "Variant Compare At Price", "Status"];
+      const rows = state.batchPack.map(item => {
+        return [
+          sanitizeCsvCell(item.title),
+          sanitizeCsvCell(item.description),
+          sanitizeCsvCell(item.price),
+          sanitizeCsvCell(item.comparePrice),
+          sanitizeCsvCell(item.status || "active")
+        ];
+      });
+
+      const csvContent = headers.map(h => `"${h}"`).join(",") + "\n" + rows.map(r => r.join(",")).join("\n");
+      const filename = `pack_shopify_complet_${state.batchPack.length}_produits_dz_${Date.now()}.csv`;
+      triggerFileDownload(csvContent, filename);
+
+      logDatabaseEvent('Pack Shopify Exporté', `Pack complet de ${state.batchPack.length} produits exporté vers Shopify.`);
+      showToast(`Pack Shopify Complet téléchargé (${state.batchPack.length} produits) ! 🚀`, 'success');
+    }
+
+    function removeProductFromPack(packId) {
+      state.batchPack = state.batchPack.filter(p => p.id !== packId);
+      saveStateToLocalStorage();
+      logDatabaseEvent('Pack Modifié', `Produit ${packId} retiré du pack.`);
+      showToast('Produit retiré du Pack.', 'warning');
+      renderApp();
+    }
+
+    function clearEntirePack() {
+      if (confirm('Voulez-vous vraiment vider l’ensemble du Pack en cours ?')) {
+        state.batchPack = [];
+        saveStateToLocalStorage();
+        logDatabaseEvent('Pack Réinitialisé', 'Le pack a été vidé.');
+        showToast('Le pack a été réinitialisé.', 'warning');
+        renderApp();
+      }
+    }
+
+    function addAllCatalogToPack() {
+      state.items.forEach(item => {
+        const alreadyInPack = state.batchPack.some(p => p.title.includes(item.titleFr));
+        if (!alreadyInPack) {
+          state.batchPack.push({
+            id: 'pack_item_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            title: `${item.titleAr} - ${item.titleFr}`,
+            description: `<p><strong>${item.titleAr}</strong></p><p>${item.descriptionAr}</p><hr/><p>${item.descriptionFr}</p><p><em>🚚 الدفع عند الاستلام - توصيل متوفر لجميع الولايات</em></p>`,
+            price: item.sellingPriceDzd,
+            comparePrice: item.crossedPriceDzd,
+            images: item.image,
+            status: 'active',
+            sourceUrl: item.sourceUrl,
+            wilayaHub: item.wilayaHub,
+            addedAt: new Date().toLocaleTimeString()
+          });
+        }
+      });
+      saveStateToLocalStorage();
+      showToast(`${state.items.length} produits du catalogue ajoutés au Pack !`, 'success');
+      renderApp();
     }
 
     // ==========================================
@@ -647,6 +787,21 @@ Ne fournis aucun texte autour du JSON.`;
         createdAt: new Date().toLocaleTimeString()
       };
 
+      // AUTOMATICALLY ACCUMULATE OBJECT DATA INTO GLOBAL BATCH PACK ARRAY IN MEMORY
+      const newPackItem = {
+        id: 'pack_item_' + Date.now(),
+        title: `${newItem.titleAr} - ${newItem.titleFr}`,
+        description: `<p><strong>${newItem.titleAr}</strong></p><p>${newItem.descriptionAr}</p><hr/><p>${newItem.descriptionFr}</p><p><em>🚚 التوصيل متوفر لـ 58 ولاية - الدفع عند الاستلام بعد المعاينة</em></p>`,
+        price: newItem.sellingPriceDzd,
+        comparePrice: newItem.crossedPriceDzd,
+        images: newItem.image,
+        status: 'active',
+        sourceUrl: newItem.sourceUrl,
+        wilayaHub: newItem.wilayaHub,
+        addedAt: new Date().toLocaleTimeString()
+      };
+      state.batchPack.unshift(newPackItem);
+
       state.scrapeLog = 'Synchronisation du log vers Supabase...';
       renderApp();
 
@@ -685,9 +840,9 @@ Ne fournis aucun texte autour du JSON.`;
 
       state.isScraping = false;
       state.scrapeLog = '';
-      state.currentTab = 'drafts';
+      state.currentTab = 'packs'; // Transition to pack management view to see accumulated batch
 
-      showToast('Scrape terminé ! Fiche bilingue créée et synchronisée.', 'success');
+      showToast(`Scrape réussi ! Produit injecté dans le Pack en cours (${state.batchPack.length} produits) 🎉`, 'success');
       renderApp();
     }
 
@@ -766,12 +921,14 @@ Ne fournis aucun texte autour du JSON.`;
 
     // --- MAIN DASHBOARD VIEW ---
     function renderDashboardView() {
-      const activeStores = state.connectedStores.length;
       const totalCatalogItems = state.items.length;
+      const totalPackItems = state.batchPack.length;
 
       return `
+        <!-- Main Top Navigation -->
         <header class="h-16 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 flex items-center justify-between">
           <div class="flex items-center gap-4 sm:gap-6">
+            <!-- Brand -->
             <div class="flex items-center gap-3 cursor-pointer" onclick="state.currentTab = 'scraper'; renderApp();">
               <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center font-extrabold text-white text-sm shadow-md shadow-brand-500/30">
                 CF
@@ -784,6 +941,7 @@ Ne fournis aucun texte autour du JSON.`;
               </div>
             </div>
 
+            <!-- Currency Indicator (Square Port-Saïd Market Rate) -->
             <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
               <span class="text-slate-400">Taux Square :</span>
               <span class="font-bold text-emerald-400 font-mono">1$ = ${state.scraper.exchangeRate} DA</span>
@@ -791,12 +949,24 @@ Ne fournis aucun texte autour du JSON.`;
             </div>
           </div>
 
+          <!-- Controls & Config Indicator -->
           <div class="flex items-center gap-3">
+            <!-- Pack Quick Badge -->
+            <button 
+              onclick="state.currentTab = 'packs'; renderApp();"
+              class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-500/30 text-xs text-emerald-300 hover:bg-emerald-900/40 transition-colors"
+            >
+              <span>📦 Pack Actif :</span>
+              <span class="font-extrabold text-white font-mono bg-emerald-600 px-1.5 py-0.5 rounded-md text-[11px]">${totalPackItems}</span>
+            </button>
+
+            <!-- Supabase Status Badge -->
             <div class="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-xs text-slate-300">
               <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
               <span>Supabase Connecté</span>
             </div>
 
+            <!-- Settings / Credentials Button -->
             <button 
               onclick="state.showSettingsModal = true; renderApp();"
               title="Inspecter ou modifier les clés d'API (Supabase & Gemini)"
@@ -807,11 +977,15 @@ Ne fournis aucun texte autour du JSON.`;
           </div>
         </header>
 
+        <!-- Body Shell: Sidebar + Content -->
         <div class="flex-1 flex flex-col md:flex-row">
+          
+          <!-- Sidebar -->
           <aside class="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-800/80 bg-slate-900/40 p-4 shrink-0 flex flex-col justify-between">
             <div class="space-y-1">
               <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-3 py-2">Modules Marchands</div>
 
+              <!-- Nav: Scraper -->
               <button 
                 onclick="state.currentTab = 'scraper'; renderApp();"
                 class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
@@ -827,6 +1001,23 @@ Ne fournis aucun texte autour du JSON.`;
                 <span class="px-1.5 py-0.5 text-[10px] rounded-md bg-emerald-500/20 text-emerald-300 font-bold">2.5</span>
               </button>
 
+              <!-- Nav: Gestion des Packs (Batch Processing) -->
+              <button 
+                onclick="state.currentTab = 'packs'; renderApp();"
+                class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  state.currentTab === 'packs' 
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm' 
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                }"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="text-emerald-400 text-sm">📦</span>
+                  <span class="font-bold">Gestion des Packs</span>
+                </div>
+                <span class="px-2 py-0.5 text-[10px] rounded-full bg-emerald-500 text-slate-950 font-black shadow-sm">${totalPackItems}</span>
+              </button>
+
+              <!-- Nav: Ready for Review (Drafts) -->
               <button 
                 onclick="state.currentTab = 'drafts'; renderApp();"
                 class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
@@ -842,6 +1033,7 @@ Ne fournis aucun texte autour du JSON.`;
                 <span class="px-2 py-0.5 text-[10px] rounded-full bg-slate-800 text-slate-300 font-bold">${totalCatalogItems}</span>
               </button>
 
+              <!-- Nav: Connect Storefront -->
               <button 
                 onclick="state.currentTab = 'connect'; renderApp();"
                 class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
@@ -857,6 +1049,7 @@ Ne fournis aucun texte autour du JSON.`;
                 <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
               </button>
 
+              <!-- Nav: 58 Wilayas Matrix -->
               <button 
                 onclick="state.currentTab = 'wilayas'; renderApp();"
                 class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
@@ -872,6 +1065,7 @@ Ne fournis aucun texte autour du JSON.`;
                 <span class="text-[10px] text-slate-400">58</span>
               </button>
 
+              <!-- Nav: Supabase Logs -->
               <button 
                 onclick="state.currentTab = 'dblogs'; renderApp();"
                 class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
@@ -896,7 +1090,7 @@ Ne fournis aucun texte autour du JSON.`;
                 <span class="text-[10px] text-emerald-400 font-semibold">Production</span>
               </div>
               <p class="text-[11px] text-slate-400 leading-snug">
-                Formulaires COD YouCan & Shopify prêts avec sélecteur 58 wilayas et calcul direct en Dinars.
+                Batch processing actif : chaque produit scrapé est automatiquement accumulé dans le Pack pour export YouCan & Shopify 1-Clic.
               </p>
             </div>
           </aside>
@@ -904,6 +1098,7 @@ Ne fournis aucun texte autour du JSON.`;
           <main class="flex-1 p-4 md:p-8 bg-slate-950 overflow-y-auto">
             ${
               state.currentTab === 'scraper' ? renderScraperView() :
+              state.currentTab === 'packs' ? renderPacksView() :
               state.currentTab === 'connect' ? renderConnectView() :
               state.currentTab === 'drafts' ? renderDraftsView() :
               state.currentTab === 'wilayas' ? renderWilayasView() :
@@ -937,7 +1132,7 @@ Ne fournis aucun texte autour du JSON.`;
                 <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold">DZ COD Ready</span>
               </h2>
               <p class="text-xs text-slate-400 mt-1">
-                Extrayez n'importe quelle URL, convertissez au taux Square Port-Saïd et générez des fiches en Darija et Français optimisées pour la vente.
+                Extrayez n'importe quelle URL, convertissez au taux Square Port-Saïd et générez des fiches en Darija et Français. Les produits scrapés s'ajoutent directement au Pack en cours !
               </p>
             </div>
 
@@ -1081,11 +1276,11 @@ Ne fournis aucun texte autour du JSON.`;
 
               <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2 text-xs text-slate-300">
                 <div class="font-bold text-white flex items-center justify-between">
-                  <span>Moteur de Rédaction IA Bilingue</span>
-                  <span class="text-[10px] text-emerald-400 font-mono">Gemini 2.5 Prêt</span>
+                  <span>Moteur de Rédaction IA Bilingue & Batch Pack</span>
+                  <span class="text-[10px] text-emerald-400 font-mono">Auto-Pack Actif</span>
                 </div>
                 <p class="text-[11px] text-slate-400 leading-snug">
-                  Génération simultanée du titre et de la description en <strong>Arabe Darija / الفصحى</strong> adaptée au Paiement à la Livraison (COD) et en <strong>Français</strong> pour catalogue moderne.
+                  Génération simultanée en <strong>Arabe Darija / الفصحى</strong> et en <strong>Français</strong>. Chaque produit scrapé est automatiquement accumulé dans le Pack pour téléchargement direct consolidé.
                 </p>
               </div>
 
@@ -1096,7 +1291,7 @@ Ne fournis aucun texte autour du JSON.`;
                   class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-brand-600 via-emerald-500 to-teal-400 hover:from-brand-500 hover:to-teal-300 text-white font-extrabold text-sm shadow-xl shadow-brand-600/30 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
                 >
                   <span class="text-base">⚡</span>
-                  <span>Lancer le Scrape & Traduction IA (Gemini API)</span>
+                  <span>Lancer le Scrape & Ajouter au Pack en Cours</span>
                 </button>
               </div>
             </div>
@@ -1158,10 +1353,10 @@ Ne fournis aucun texte autour du JSON.`;
 
                 <div class="pt-4 border-t border-slate-800">
                   <button 
-                    onclick="state.currentTab = 'drafts'; renderApp();"
-                    class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5"
+                    onclick="state.currentTab = 'packs'; renderApp();"
+                    class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/30"
                   >
-                    <span>Voir le Catalogue Prêt pour Révision (${state.items.length})</span>
+                    <span>📦 Accéder à la Gestion des Packs (${state.batchPack.length} items)</span>
                     <span>→</span>
                   </button>
                 </div>
@@ -1183,7 +1378,7 @@ Ne fournis aucun texte autour du JSON.`;
                 </div>
 
                 <p class="text-xs text-slate-300 leading-relaxed">
-                  Exportez instantanément la fiche calculée avec son titre bilingue, son prix en Dinars (<span class="text-emerald-400 font-bold">${calc.finalPrice} DZD</span>) et sa description commerciale formatée pour votre vitrine :
+                  Téléchargez la fiche individuelle calculée (<span class="text-emerald-400 font-bold">${calc.finalPrice} DZD</span>) ou exportez l'ensemble du pack accumulé :
                 </p>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -1197,7 +1392,7 @@ Ne fournis aucun texte autour du JSON.`;
                       <span class="text-sm font-black">↓</span>
                     </div>
                     <span class="text-[13px] font-extrabold tracking-tight">Export CSV pour YouCan Store</span>
-                    <span class="text-[10px] opacity-80 mt-0.5">Colonnes Title, Description, Price, CompareAt</span>
+                    <span class="text-[10px] opacity-80 mt-0.5">Fiche active calculée</span>
                   </button>
 
                   <!-- Shopify Store CSV Export Button -->
@@ -1210,26 +1405,26 @@ Ne fournis aucun texte autour du JSON.`;
                       <span class="text-sm font-black text-[#95bf47]">↓</span>
                     </div>
                     <span class="text-[13px] font-extrabold tracking-tight text-white group-hover:text-[#95bf47] transition-colors">Export CSV pour Shopify</span>
-                    <span class="text-[10px] text-slate-400 mt-0.5">Colonnes Title, Body (HTML), Variant Price</span>
+                    <span class="text-[10px] text-slate-400 mt-0.5">Fiche active calculée</span>
                   </button>
                 </div>
 
-                <!-- Bulk Export All Items in Catalog -->
+                <!-- Bulk Export Links -->
                 <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                  <span>Besoin de tout le catalogue ?</span>
+                  <span class="text-[11px]">Télécharger le Pack Accumulé :</span>
                   <div class="flex items-center gap-2">
                     <button 
-                      onclick="exportYouCanCsv(true)"
-                      class="text-[11px] text-emerald-400 hover:underline font-semibold"
+                      onclick="downloadBatchPackYouCanCsv()"
+                      class="text-[11px] text-emerald-400 hover:underline font-bold"
                     >
-                      Tout YouCan (${state.items.length})
+                      Pack YouCan (${state.batchPack.length})
                     </button>
                     <span>·</span>
                     <button 
-                      onclick="exportShopifyCsv(true)"
-                      class="text-[11px] text-[#95bf47] hover:underline font-semibold"
+                      onclick="downloadBatchPackShopifyCsv()"
+                      class="text-[11px] text-[#95bf47] hover:underline font-bold"
                     >
-                      Tout Shopify (${state.items.length})
+                      Pack Shopify (${state.batchPack.length})
                     </button>
                   </div>
                 </div>
@@ -1242,7 +1437,220 @@ Ne fournis aucun texte autour du JSON.`;
       `;
     }
 
-    // --- 2. CONNECT STOREFRONT (YouCan & Shopify) ---
+    // --- 2. GESTION DES PACKS (BATCH PROCESSING & CONSOLIDATED CSV EXPORT) ---
+    function renderPacksView() {
+      const pack = state.batchPack;
+      const totalPackPrice = pack.reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
+      const totalComparePrice = pack.reduce((acc, curr) => acc + (Number(curr.comparePrice) || 0), 0);
+
+      return `
+        <div class="max-w-6xl mx-auto space-y-8">
+          
+          <!-- Page Header -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                Gestion des Packs (Batch Processing)
+                <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold">
+                  ${pack.length} Produits en Mémoire
+                </span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">
+                Chaque produit extrait et traduit s'accumule automatiquement dans ce pack. Exportez l'ensemble en UN SEUL fichier CSV consolidé pour YouCan ou Shopify.
+              </p>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button 
+                onclick="addAllCatalogToPack()"
+                class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 transition-all flex items-center gap-1.5"
+              >
+                <span>+ Importer Catalogue (${state.items.length})</span>
+              </button>
+              <button 
+                onclick="clearEntirePack()"
+                class="px-3 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-xs font-semibold text-rose-300 border border-rose-800/40 transition-all flex items-center gap-1.5"
+              >
+                <span>Vider le Pack</span>
+              </button>
+              <button 
+                onclick="state.currentTab = 'scraper'; renderApp();"
+                class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+              >
+                <span>+ Scraper un Produit</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Pack Summary Metric Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800">
+              <div class="text-xs text-slate-400 font-medium mb-1">Articles dans le Pack</div>
+              <div class="text-3xl font-extrabold text-white">${pack.length} <span class="text-sm font-normal text-slate-500">produits</span></div>
+              <div class="text-[11px] text-emerald-400 mt-1">✓ Prêts pour injection bulk</div>
+            </div>
+
+            <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800">
+              <div class="text-xs text-slate-400 font-medium mb-1">Valeur Totale du Pack (COD)</div>
+              <div class="text-3xl font-extrabold text-emerald-400 font-mono">${totalPackPrice.toLocaleString()} <span class="text-sm font-normal text-slate-400">DA</span></div>
+              <div class="text-[11px] text-slate-500 mt-1">Prix de vente cumulé TTC</div>
+            </div>
+
+            <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800">
+              <div class="text-xs text-slate-400 font-medium mb-1">Prix Barré Marketing Suggéré</div>
+              <div class="text-3xl font-extrabold text-slate-300 font-mono">${totalComparePrice.toLocaleString()} <span class="text-sm font-normal text-slate-500">DA</span></div>
+              <div class="text-[11px] text-brand-400 mt-1">+32% d'effet d'aubaine</div>
+            </div>
+
+            <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800">
+              <div class="text-xs text-slate-400 font-medium mb-1">Encodage des Fichiers</div>
+              <div class="text-3xl font-extrabold text-white">UTF-8 <span class="text-sm text-emerald-400 font-normal">BOM</span></div>
+              <div class="text-[11px] text-slate-400 mt-1">Support parfait Arabe & Français</div>
+            </div>
+          </div>
+
+          <!-- PROMINENT CONSOLIDATED CSV DOWNLOAD ACTION BUTTONS (TOP & BOTTOM) -->
+          <div class="p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-brand-500/40 shadow-2xl space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                  <span>⚡</span> <span>Exportation Consolidiée du Pack (${pack.length} Produits)</span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-0.5">
+                  Cliquez ci-dessous pour générer le fichier CSV unique qui insère tous vos produits en un seul import sur votre boutique.
+                </p>
+              </div>
+              <span class="text-xs text-emerald-400 font-bold px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-800/40">
+                1 Seul Fichier CSV Consolidé
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              <!-- YouCan Consolidated Pack Download -->
+              <button 
+                onclick="downloadBatchPackYouCanCsv()"
+                class="p-4 rounded-2xl bg-[#00b074] hover:bg-[#029764] text-white font-extrabold text-sm shadow-xl shadow-emerald-950/50 active:scale-[0.99] transition-all flex items-center justify-between group"
+              >
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-lg font-black">
+                    Y
+                  </div>
+                  <div class="text-left">
+                    <div class="text-xs text-emerald-100 font-medium uppercase tracking-wider">Format YouCan Store Algérie</div>
+                    <div class="text-sm sm:text-base font-extrabold">Télécharger le Pack Complet en CSV (YouCan)</div>
+                  </div>
+                </div>
+                <span class="text-2xl font-black group-hover:translate-y-0.5 transition-transform">↓</span>
+              </button>
+
+              <!-- Shopify Consolidated Pack Download -->
+              <button 
+                onclick="downloadBatchPackShopifyCsv()"
+                class="p-4 rounded-2xl bg-slate-900 hover:bg-slate-850 text-white font-extrabold text-sm border-2 border-[#95bf47] hover:bg-slate-800 active:scale-[0.99] transition-all flex items-center justify-between group shadow-xl"
+              >
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-[#95bf47]/20 text-[#95bf47] flex items-center justify-center text-lg font-black">
+                    S
+                  </div>
+                  <div class="text-left">
+                    <div class="text-xs text-[#95bf47] font-medium uppercase tracking-wider">Format Shopify Global</div>
+                    <div class="text-sm sm:text-base font-extrabold">Télécharger le Pack Complet en CSV (Shopify)</div>
+                  </div>
+                </div>
+                <span class="text-2xl font-black text-[#95bf47] group-hover:translate-y-0.5 transition-transform">↓</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Accumulated Products Table / List -->
+          <div class="rounded-3xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-xl">
+            <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-bold text-white">Produits Inclus dans la File d'Attente du Pack</h3>
+                <p class="text-xs text-slate-400">Ces articles sont conservés en mémoire et seront tous écrits dans le même CSV consolidé.</p>
+              </div>
+              <span class="text-xs text-slate-400 font-mono">${pack.length} élément(s)</span>
+            </div>
+
+            ${pack.length === 0 ? `
+              <div class="p-12 text-center text-slate-400 text-xs">
+                Aucun produit dans le Pack actuellement. 
+                <button onclick="state.currentTab = 'scraper'; renderApp();" class="text-emerald-400 underline font-semibold ml-1">
+                  Lancez un scrape pour commencer l'accumulation
+                </button>
+              </div>
+            ` : `
+              <div class="divide-y divide-slate-800/80">
+                ${pack.map((item, index) => `
+                  <div class="p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:bg-slate-800/20 transition-colors">
+                    
+                    <div class="flex items-center gap-4 flex-1 min-w-0">
+                      <span class="text-xs font-mono font-bold text-slate-500 w-6">#${index + 1}</span>
+                      <img src="${item.images}" alt="Thumb" class="w-14 h-14 rounded-xl object-cover border border-slate-800 shrink-0" />
+                      <div class="space-y-1 min-w-0 flex-1">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase">
+                            ${item.status}
+                          </span>
+                          <span class="text-[10px] text-slate-500 font-mono">Ajouté à ${item.addedAt || 'Aujourd’hui'}</span>
+                          ${item.wilayaHub ? `<span class="text-[10px] text-slate-400">Hub: ${item.wilayaHub}</span>` : ''}
+                        </div>
+                        <h4 class="text-xs font-bold text-white truncate max-w-xl">${item.title}</h4>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
+                      <div class="text-right">
+                        <div class="text-[10px] text-slate-400">Prix CSV (DZD)</div>
+                        <div class="text-sm font-extrabold text-emerald-400 font-mono">${Number(item.price).toLocaleString()} DA</div>
+                        <div class="text-[10px] line-through text-slate-500 font-mono">${Number(item.comparePrice).toLocaleString()} DA</div>
+                      </div>
+
+                      <button 
+                        onclick="removeProductFromPack('${item.id}')"
+                        title="Retirer cet article du pack"
+                        class="p-2 rounded-xl bg-slate-950 hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 border border-slate-800 transition-colors"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                      </button>
+                    </div>
+
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+
+          <!-- Bottom Big Download Banner (Matching User Requirement) -->
+          <div class="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <div class="text-xs font-bold text-white uppercase tracking-wider">Téléchargement Rapide du Pack Entier</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">Boucle sur l'ensemble des ${pack.length} produits du tableau et crée le CSV unique.</div>
+            </div>
+
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+              <button 
+                onclick="downloadBatchPackYouCanCsv()"
+                class="flex-1 sm:flex-initial px-5 py-3 rounded-xl bg-[#00b074] hover:bg-[#029764] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                <span>Télécharger le Pack Complet en CSV (YouCan)</span>
+                <span>↓</span>
+              </button>
+              <button 
+                onclick="downloadBatchPackShopifyCsv()"
+                class="flex-1 sm:flex-initial px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-[#95bf47] hover:text-white border border-slate-700 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                <span>Télécharger le Pack Complet en CSV (Shopify)</span>
+                <span>↓</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      `;
+    }
+
+    // --- 3. CONNECT STOREFRONT (YouCan & Shopify) ---
     function renderConnectView() {
       const isYouCan = state.activeStoreTab === 'youcan';
 
@@ -1424,7 +1832,7 @@ Ne fournis aucun texte autour du JSON.`;
       `;
     }
 
-    // --- 3. CATALOG & READY DRAFTS VIEW ---
+    // --- 4. CATALOG & READY DRAFTS VIEW ---
     function renderDraftsView() {
       return `
         <div class="max-w-6xl mx-auto space-y-8">
@@ -1443,16 +1851,10 @@ Ne fournis aucun texte autour du JSON.`;
 
             <div class="flex items-center gap-2">
               <button 
-                onclick="exportYouCanCsv(true)"
-                class="px-3.5 py-2 rounded-xl bg-[#00b074] hover:bg-[#029764] text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
+                onclick="state.currentTab = 'packs'; renderApp();"
+                class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
               >
-                <span>Export YouCan CSV (${state.items.length})</span>
-              </button>
-              <button 
-                onclick="exportShopifyCsv(true)"
-                class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[#95bf47] hover:text-white border border-slate-700 text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
-              >
-                <span>Export Shopify CSV (${state.items.length})</span>
+                <span>📦 Voir Gestion des Packs (${state.batchPack.length})</span>
               </button>
               <button 
                 onclick="state.currentTab = 'scraper'; renderApp();"
@@ -1557,7 +1959,7 @@ Ne fournis aucun texte autour du JSON.`;
       `;
     }
 
-    // --- 4. WILAYAS & LOGISTICS MATRIX VIEW ---
+    // --- 5. WILAYAS & LOGISTICS MATRIX VIEW ---
     function renderWilayasView() {
       return `
         <div class="max-w-6xl mx-auto space-y-8">
@@ -1618,7 +2020,7 @@ Ne fournis aucun texte autour du JSON.`;
       `;
     }
 
-    // --- 5. SUPABASE DATABASE LOGS VIEW ---
+    // --- 6. SUPABASE DATABASE LOGS VIEW ---
     function renderDbLogsView() {
       return `
         <div class="max-w-5xl mx-auto space-y-6">
@@ -1660,7 +2062,7 @@ Ne fournis aucun texte autour du JSON.`;
       `;
     }
 
-    // --- 6. SETTINGS MODAL (CREDENTIALS INSPECTION) ---
+    // --- 7. SETTINGS MODAL (CREDENTIALS INSPECTION) ---
     function renderSettingsModal() {
       return `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
